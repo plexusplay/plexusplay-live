@@ -2,6 +2,9 @@ import asyncio
 import json
 import websockets
 
+ADDRESS = '0.0.0.0'
+PORT = 8080
+
 test_message = {
     "choice1": "Choice 1 from server",
     "choice2": "Choice 2 from server",
@@ -16,7 +19,8 @@ async def echo(websocket, path):
         print(f'{path}: {message}')
 
 async def main():
-    async with websockets.serve(echo, "0.0.0.0", 8080):
+    print(f'running websocket server at {ADDRESS}:{PORT}')
+    async with websockets.serve(echo, ADDRESS, PORT):
         await asyncio.Future()  # run forever
 
 asyncio.run(main())
