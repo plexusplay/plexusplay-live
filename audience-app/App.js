@@ -16,6 +16,8 @@ const App = () => {
 
   const [userId, setUserId] = useState("");
 
+  const [isModalVisible, setModalVisible] = useState(true);
+
 //   const storeData = async (key, value) => {
 //     try {
 //       await AsyncStorage.setItem(key, value)
@@ -63,11 +65,17 @@ const App = () => {
     ws.current.send(message);
   }
 
+  const modalCallback = (name) => {
+    setModalVisible(false);
+    setUserId(name);
+  }
+
 
   return (
     <View
       style={styles.container}>
       <View style={{ flex: 1, backgroundColor: 'red' }} >
+        <Text>{userId}</Text>
         <Text style={[styles.big, styles.question]}>{data.question}</Text>
       </View>
       <Pressable style={{ flex: 3, backgroundColor: 'darkorange' }}
@@ -78,10 +86,7 @@ const App = () => {
         onPress={() => sendMessage('choice2')}  >
         <Text style={[styles.big, styles.choice]}>{data.choice2}</Text>
       </Pressable>
-      <UserIdModal isVisible={userId === ""} onClose={setUserId} />
-      <Pressable style={{flex: 2}}>
-        <Text>{userId}</Text>
-      </Pressable>
+      <UserIdModal isVisible={isModalVisible} onClose={modalCallback} />
     </View>
   );
 };
