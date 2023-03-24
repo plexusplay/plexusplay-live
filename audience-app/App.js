@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { StyleSheet, View, Text, Pressable } from 'react-native';
 
 
-const WS_BACKEND = "ws://192.168.0.69:8080";
+const WS_BACKEND = "wss://voting-socket.rumpus.club";
 
 const App = () => {
 
