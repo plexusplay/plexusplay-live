@@ -31,22 +31,17 @@ const App = () => {
 
   return (
     <View
-      style={[
-        styles.container,
-        {
-          flexDirection: 'column',
-        },
-      ]}>
+      style={styles.container}>
       <View style={{ flex: 1, backgroundColor: 'red' }} >
-        <Text>{data.question}</Text>
+        <Text style={styles.big}>{data.question}</Text>
       </View>
       <Pressable style={{ flex: 3, backgroundColor: 'darkorange' }}
         onPress={() => sendMessage('choice1')}  >
-        <Text>{data.choice1}</Text>
+        <Text style={styles.big}>{data.choice1}</Text>
       </Pressable>
       <Pressable style={{ flex: 3, backgroundColor: 'green' }} 
         onPress={() => sendMessage('choice2')}  >
-        <Text>{data.choice2}</Text>
+        <Text style={styles.big}>{data.choice2}</Text>
       </Pressable>
     </View>
   );
@@ -55,7 +50,13 @@ const App = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    flexDirection: 'column',
   },
+  big: {
+    fontSize: 24,
+    marginLeft: 'auto',
+    marginRight: 'auto',
+  }
 });
 
 
