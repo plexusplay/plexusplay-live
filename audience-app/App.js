@@ -8,7 +8,7 @@ const WS_BACKEND = "wss://voting-socket.rumpus.club";
 
 const App = () => {
 
-  const [data, setData] = useState({
+  const [ballot, setBallot] = useState({
     choice1: "Choice 1",
     choice2: "Choice 2",
     question: "Question",
@@ -18,26 +18,13 @@ const App = () => {
 
   const [isModalVisible, setModalVisible] = useState(true);
 
-//   const storeData = async (key, value) => {
-//     try {
-//       await AsyncStorage.setItem(key, value)
-//     } catch (e) {
-//       // saving error
-//     }
-//   }
+  const storeData = async (key, value) => {
+      await AsyncStorage.setItem(key, JSON.stringify(value));
+  }
 
-//   const getData = async (key) => {
-//   try {
-//     const value = await AsyncStorage.getItem(key)
-//     if(value !== null) {
-//       // key found
-//       return value;
-//     }
-//   } catch(e) {
-//     // error reading value
-//     console.log(e);
-//   }
-// }
+  const getData = async (key) => {
+    return await AsyncStorage.getItem(key);
+}
   // Set up storage of name
   // useEffect(() => {
   //   storeData('userId', 'mr. garbage');
@@ -49,12 +36,13 @@ const App = () => {
   // Set up WebSocket
   useEffect(() => {
     ws.current = new WebSocket(WS_BACKEND);
-    ws.current.onmessage = (message) => {
-      console.log(message);
-      const newData = JSON.parse(message.data);
-      const oldData = {...data};
+    ws.current.onmessage = (ws_message) => {
+      const message = JSON.parse(ws_message);
+      const code = message['code'];
+      const data = message['data'];
+      const oldData = {...ballot};
       const merged = Object.assign(oldData, newData);
-      setData(merged);
+      setBallot(merged);
     };
     return () => ws.current.close();
   }, []);
@@ -76,15 +64,15 @@ const App = () => {
       style={styles.container}>
       <View style={{ flex: 1, backgroundColor: 'red' }} >
         <Text>{userId}</Text>
-        <Text style={[styles.big, styles.question]}>{data.question}</Text>
+        <Text style={[styles.big, styles.question]}>{ballot.question}</Text>
       </View>
       <Pressable style={{ flex: 3, backgroundColor: 'darkorange' }}
         onPress={() => sendMessage('choice1')}  >
-        <Text style={[styles.big, styles.choice]}>{data.choice1}</Text>
+        <Text style={[styles.big, styles.choice]}>{ballot.choice1}</Text>
       </Pressable>
       <Pressable style={{ flex: 3, backgroundColor: 'green' }} 
         onPress={() => sendMessage('choice2')}  >
-        <Text style={[styles.big, styles.choice]}>{data.choice2}</Text>
+        <Text style={[styles.big, styles.choice]}>{ballot.choice2}</Text>
       </Pressable>
       <UserIdModal isVisible={isModalVisible} onClose={modalCallback} />
     </View>
