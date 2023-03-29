@@ -42,28 +42,26 @@ const App = () => {
   // Set up WebSocket
   useEffect(() => {
     ws.current = new WebSocket(WS_BACKEND);
-    ws.current.onmessage = (ws_message) => {
-      const message = JSON.parse(ws_message);
-      const code = message['code'];
-      const data = message['data'];
-      const oldData = {...ballot};
-      const merged = Object.assign(oldData, data);
-      setBallot(merged);
-    };
+    ws.current.onmessage = receiveMessage;
     return () => ws.current.close();
   }, []);
 
+  const receiveMessage = (msg_event) => {
+    console.log(msg_event);
+    const message = JSON.parse(msg_event.data);
+    const code = message['code'];
+    const data = message['data'];
+    if (code === 'setBallot') {
+      const oldData = {...ballot};
+      const merged = Object.assign(oldData, data);
+      setBallot(merged);
+    }
+  }
 
   const sendMessage = (message) => {
     alert('sending ' + message + ' to server');
     ws.current.send(message);
   }
-
-  const modalCallback = (name) => {
-    setModalVisible(false);
-    setUserId(name);
-  }
-
 
   return (
     <View
