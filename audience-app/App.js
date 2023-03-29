@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { StyleSheet, View, Text, Pressable } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import UserIdModal from "./UserIdModal"
+import { uniqueNamesGenerator, adjectives, colors, animals } from 'unique-names-generator';
 
 
 const WS_BACKEND = "wss://voting-socket.rumpus.club";
@@ -14,24 +14,30 @@ const App = () => {
     question: "Question",
   });
 
-  const [userId, setUserId] = useState("");
+  const [votes, setVotes] = useState({
+    choice1: 0,
+    choice2: 0,
+  });
 
-  const [isModalVisible, setModalVisible] = useState(true);
-
-  const storeData = async (key, value) => {
-      await AsyncStorage.setItem(key, JSON.stringify(value));
-  }
-
-  const getData = async (key) => {
-    return await AsyncStorage.getItem(key);
-}
-  // Set up storage of name
-  // useEffect(() => {
-  //   storeData('userId', 'mr. garbage');
-  // }, []);
-
+  const [userId, setUserId] = useState("userId");
 
   const ws = useRef(null);
+
+//  Set up unique name
+  useEffect(() => {
+    AsyncStorage.getItem('userId').then((maybeUserId) => {
+      if (maybeUserId !== null) {
+        setUserId(maybeUserId);
+      } else { // No userId exists
+        const uniqueUserId = uniqueNamesGenerator({
+          dictionaries: [adjectives, colors, animals],
+        });
+        AsyncStorage.setItem('userId', uniqueUserId).then(() => {
+          setUserId(uniqueUserId);
+        });
+      }
+    });
+  }, []);
 
   // Set up WebSocket
   useEffect(() => {
@@ -41,7 +47,7 @@ const App = () => {
       const code = message['code'];
       const data = message['data'];
       const oldData = {...ballot};
-      const merged = Object.assign(oldData, newData);
+      const merged = Object.assign(oldData, data);
       setBallot(merged);
     };
     return () => ws.current.close();
@@ -74,7 +80,6 @@ const App = () => {
         onPress={() => sendMessage('choice2')}  >
         <Text style={[styles.big, styles.choice]}>{ballot.choice2}</Text>
       </Pressable>
-      <UserIdModal isVisible={isModalVisible} onClose={modalCallback} />
     </View>
   );
 };
