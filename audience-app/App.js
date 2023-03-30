@@ -19,6 +19,8 @@ const App = () => {
     choice2: 0,
   });
 
+  const [choice, setChoice] = useState("");
+
   const [userId, setUserId] = useState("userId");
 
   const ws = useRef(null);
@@ -52,15 +54,27 @@ const App = () => {
     const code = message['code'];
     const data = message['data'];
     if (code === 'setBallot') {
-      const oldData = {...ballot};
-      const merged = Object.assign(oldData, data);
+      const oldBallot = {...ballot};
+      const merged = Object.assign(oldBallot, data);
       setBallot(merged);
+    } else if (code === 'setVotes') {
+      setVotes(data);
     }
   }
 
   const sendMessage = (message) => {
-    alert('sending ' + message + ' to server');
+    console.log('sending ' + message + ' to server');
     ws.current.send(message);
+  }
+
+  const sendVote = (choice) => {
+    setChoice(choice);
+    const message = {
+      userId: userId,
+      code: 'vote',
+      data: choice,
+    }
+    sendMessage(JSON.stringify(message));
   }
 
   return (
@@ -71,12 +85,16 @@ const App = () => {
         <Text style={[styles.big, styles.question]}>{ballot.question}</Text>
       </View>
       <Pressable style={{ flex: 3, backgroundColor: 'darkorange' }}
-        onPress={() => sendMessage('choice1')}  >
-        <Text style={[styles.big, styles.choice]}>{ballot.choice1}</Text>
+        onPress={() => sendVote('choice1')}  >
+        <Text style={[styles.big, styles.choice, choice === 'choice1' ? styles.selected : styles.unSelected]}>
+            {ballot.choice1} ({votes.choice1})
+        </Text>
       </Pressable>
       <Pressable style={{ flex: 3, backgroundColor: 'green' }} 
-        onPress={() => sendMessage('choice2')}  >
-        <Text style={[styles.big, styles.choice]}>{ballot.choice2}</Text>
+        onPress={() => sendVote('choice2')}  >
+        <Text style={[styles.big, styles.choice, choice === 'choice2' ? styles.selected : styles.unSelected]}>
+          {ballot.choice2} ({votes.choice2})
+        </Text>
       </Pressable>
     </View>
   );
@@ -98,7 +116,13 @@ const styles = StyleSheet.create({
   choice: {
     marginTop: 'auto',
     marginBottom: 'auto',
-  }
+  },
+  selected: {
+    fontWeight: 'bold',
+  },
+  unSelected: {
+    fontWeight: 'normal',
+  },
 });
 
 
