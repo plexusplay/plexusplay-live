@@ -32,10 +32,17 @@ def transform_votes(votes):
 
 
 async def send_votes():
-    totals = transform_votes(votes)
-    message = Message('setVotes', totals).serialize()
+    code = 'setVotes'
+    data = transform_votes(votes)
+    await send_to_all(code, data)
+
+async def send_to_all(code, data):
+    message = Message(code, data).serialize()
+    bg_sends = set()
     for ws in clients.values():
-        await ws.send(message)
+        task = asyncio.create_task(ws.send(message))
+        bg_sends.add(task)
+        task.add_done_callback(bg_sends.discard)
 
 async def echo(websocket, path):
     userId = None

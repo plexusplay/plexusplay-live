@@ -5,6 +5,7 @@ import { uniqueNamesGenerator, adjectives, colors, animals } from 'unique-names-
 
 
 const WS_BACKEND = "wss://voting-socket.rumpus.club";
+// const WS_BACKEND = "ws://rumpus:8080";
 
 const App = () => {
 
