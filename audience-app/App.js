@@ -4,8 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { uniqueNamesGenerator, adjectives, colors, animals } from 'unique-names-generator';
 
 
-const WS_BACKEND = "wss://voting-socket.rumpus.club";
-// const WS_BACKEND = "ws://rumpus:8080";
+const WS_BACKEND = "wss://live-voting-socket.onrender.com";
 
 const App = () => {
 

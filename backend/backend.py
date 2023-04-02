@@ -38,6 +38,7 @@ async def send_votes():
 
 async def send_to_all(code, data):
     message = Message(code, data).serialize()
+    # Do this asynchronously so a bad client doesn't freeze everyone
     bg_sends = set()
     for ws in clients.values():
         task = asyncio.create_task(ws.send(message))
@@ -45,6 +46,9 @@ async def send_to_all(code, data):
         task.add_done_callback(bg_sends.discard)
 
 async def echo(websocket, path):
+    global ballot
+    global votes
+    global clients
     userId = None
     ballot_msg = Message('setBallot', ballot).serialize()
     votes_msg = Message('setVotes', transform_votes(votes)).serialize()
@@ -57,6 +61,9 @@ async def echo(websocket, path):
         if code == 'vote':
             votes[userId] = data
             await send_votes()
+        elif code == 'setBallot':
+            ballot = data
+            await send_to_all('setBallot', ballot)
     # websocket closes
     del clients[userId]
     del votes[userId]
