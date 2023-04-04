@@ -1,7 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
 import { StyleSheet, View, Text, Pressable } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { uniqueNamesGenerator, adjectives, colors, animals } from 'unique-names-generator';
 
 
 const WS_BACKEND = "wss://live-voting-socket.onrender.com";
@@ -9,37 +7,15 @@ const WS_BACKEND = "wss://live-voting-socket.onrender.com";
 const App = () => {
 
   const [ballot, setBallot] = useState({
-    choice1: "Choice 1",
-    choice2: "Choice 2",
+    choices: ["Choice 1", "Choice 2"],
     question: "Question",
   });
 
-  const [votes, setVotes] = useState({
-    choice1: 0,
-    choice2: 0,
-  });
+  const [votes, setVotes] = useState([]);
 
-  const [choice, setChoice] = useState("");
-
-  const [userId, setUserId] = useState("userId");
+  const [choice, setChoice] = useState(-1);
 
   const ws = useRef(null);
-
-//  Set up unique name
-  useEffect(() => {
-    AsyncStorage.getItem('userId').then((maybeUserId) => {
-      if (maybeUserId !== null) {
-        setUserId(maybeUserId);
-      } else { // No userId exists
-        const uniqueUserId = uniqueNamesGenerator({
-          dictionaries: [adjectives, colors, animals],
-        });
-        AsyncStorage.setItem('userId', uniqueUserId).then(() => {
-          setUserId(uniqueUserId);
-        });
-      }
-    });
-  }, []);
 
   // Set up WebSocket
   useEffect(() => {
@@ -48,8 +24,19 @@ const App = () => {
     return () => ws.current.close();
   }, []);
 
+  // Set up heartbeat
+  useEffect(() => {
+    const heartbeatFunc = setInterval(() => {
+      sendMessage('heartbeat', null);
+    // every 5 seconds
+    }, 5000);
+    // clear this timer when the component is unmounted
+    return () => {
+      clearInterval(heartbeatFunc);
+    };
+  });
+
   const receiveMessage = (msg_event) => {
-    console.log(msg_event);
     const message = JSON.parse(msg_event.data);
     const code = message['code'];
     const data = message['data'];
@@ -64,11 +51,9 @@ const App = () => {
 
   const sendMessage = (code, data) => {
     const message = JSON.stringify({
-      userId: userId,
       code: code,
       data: data,
     });
-    console.log('sending ' + message + ' to server');
     ws.current.send(message);
   }
 
@@ -81,19 +66,18 @@ const App = () => {
     <View
       style={styles.container}>
       <View style={{ flex: 1, backgroundColor: 'red' }} >
-        <Text>{userId}</Text>
         <Text style={[styles.big, styles.question]}>{ballot.question}</Text>
       </View>
       <Pressable style={{ flex: 3, backgroundColor: 'darkorange' }}
-        onPress={() => sendVote('choice1')}  >
-        <Text style={[styles.big, styles.choice, choice === 'choice1' ? styles.selected : styles.unSelected]}>
-            {ballot.choice1} ({votes.choice1})
+        onPress={() => sendVote(0)}  >
+        <Text style={[styles.big, styles.choice, choice === 0 ? styles.selected : styles.unSelected]}>
+            {ballot.choices[0]} ({votes[0]})
         </Text>
       </Pressable>
       <Pressable style={{ flex: 3, backgroundColor: 'green' }} 
-        onPress={() => sendVote('choice2')}  >
-        <Text style={[styles.big, styles.choice, choice === 'choice2' ? styles.selected : styles.unSelected]}>
-          {ballot.choice2} ({votes.choice2})
+        onPress={() => sendVote(1)}  >
+        <Text style={[styles.big, styles.choice, choice === 1 ? styles.selected : styles.unSelected]}>
+          {ballot.choices[1]} ({votes[1]})
         </Text>
       </Pressable>
     </View>

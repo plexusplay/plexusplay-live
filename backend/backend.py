@@ -1,10 +1,23 @@
+# Standard libraries
 import asyncio
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 import json
+from pprint import pprint
+from time import sleep
+import threading
 from typing import NamedTuple
+
+# Third-party libraries
 import websockets
+from websockets.server import WebSocketServerProtocol
 
 ADDRESS = '0.0.0.0'
 PORT = 8080
+
+NUM_QUESTIONS = 4
+
+CLIENT_TIMEOUT_SECS = 10
 
 class Message(NamedTuple):
     code: str
@@ -13,66 +26,85 @@ class Message(NamedTuple):
     def serialize(self):
         return json.dumps({'code': self.code, 'data': self.data})
 
-ballot = {
-    "choice1": "Choice 1 from server",
-    "choice2": "Choice 2 from server",
-    "question": "Question from server",
-}
 
-votes = {}
+@dataclass
+class Client:
+    path: str
+    ws: WebSocketServerProtocol
+    last_seen: datetime
+    vote: int = -1
 
-clients = {}
+    def __eq__(self, __value: object) -> bool:
+        if not hasattr(__value, 'ws'):
+            return False
+        return self.ws is __value.ws
 
-def transform_votes(votes):
-    choices = ('choice1', 'choice2')
-    totals = {}
-    for c in choices:
-        totals[c] = len([v for v in votes.values() if v==c])
-    return totals
+    def __hash__(self) -> int:
+        return self.ws.__hash__()
 
 
-async def send_votes():
-    code = 'setVotes'
-    data = transform_votes(votes)
-    await send_to_all(code, data)
+class Voting:
+    def __init__(self):
+        self.ballot = {
+            "choices": ["Choice 1 from server", "Choice 2 from server"],
+            "question": "Question from server",
+        }
+        self._clients = set()
+        threading.Thread(target=self.prune_clients_thread, daemon=True).start()
 
-async def send_to_all(code, data):
-    message = Message(code, data).serialize()
-    # Do this asynchronously so a bad client doesn't freeze everyone
-    bg_sends = set()
-    for ws in clients.values():
-        task = asyncio.create_task(ws.send(message))
-        bg_sends.add(task)
-        task.add_done_callback(bg_sends.discard)
+    def prune_clients_thread(self):
+        max_diff = timedelta(seconds=CLIENT_TIMEOUT_SECS)
+        while True:
+            now = datetime.now()
+            self._clients = set(c for c in self._clients if now - c.last_seen < max_diff)
+            sleep(5)
 
-async def echo(websocket, path):
-    global ballot
-    global votes
-    global clients
-    userId = None
-    ballot_msg = Message('setBallot', ballot).serialize()
-    votes_msg = Message('setVotes', transform_votes(votes)).serialize()
-    await websocket.send(ballot_msg)
-    await websocket.send(votes_msg)
-    async for message in websocket:
+    @property
+    def clients(self):
+        return set(c.ws for c in self._clients)
+
+    @property
+    def votes(self):
+        return [len([c for c in self._clients if c.vote == x]) for x in range(NUM_QUESTIONS)]
+
+    async def send_votes(self):
+        code, data = 'setVotes', self.votes
+        await self.send_to_all(code, data)
+
+    async def send_to_all(self, code, data):
+        message = Message(code, data).serialize()
+        # Do this asynchronously so a bad client doesn't freeze everyone
+        websockets.broadcast(self.clients, message)
+
+    async def handle_message(self, client: Client, message):
         message = json.loads(message)
-        code, data, userId = message['code'], message['data'], message['userId']
-        clients[userId] = websocket
+        code, data = message['code'], message['data']
+        client.last_seen = datetime.now()
         if code == 'vote':
-            votes[userId] = data
-            await send_votes()
+            client.vote = data
+            await self.send_votes()
         elif code == 'setBallot':
             ballot = data
-            await send_to_all('setBallot', ballot)
-    # websocket closes
-    del clients[userId]
-    del votes[userId]
-    await send_votes()
+            await self.send_to_all('setBallot', ballot)
 
+    async def handle_ws(self, websocket, path):
+        if path != '/':
+            return
+        client = Client(path=path, ws=websocket, last_seen=datetime.now())
+        self._clients.add(client)
+        await self.send_votes()
+        await self.send_to_all('setBallot', self.ballot)
+        async for message in websocket:
+            await self.handle_message(client, message)
+        # websocket closes
+        self._clients.remove(websocket)
+        del self.votes[websocket]
+        await self.send_votes()
 
-async def main():
-    print(f'running websocket server at {ADDRESS}:{PORT}')
-    async with websockets.serve(echo, ADDRESS, PORT):
-        await asyncio.Future()  # run forever
+    async def start(self):
+        print(f'running websocket server at {ADDRESS}:{PORT}')
+        async with websockets.serve(self.handle_ws, ADDRESS, PORT):
+            await asyncio.Future()  # run forever
 
-asyncio.run(main())
+voting = Voting()
+asyncio.run(voting.start())
