@@ -3,8 +3,6 @@ import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 import json
-from time import sleep
-import threading
 from typing import NamedTuple
 
 # Third-party libraries
@@ -16,7 +14,7 @@ PORT = 8080
 
 NUM_QUESTIONS = 4
 
-CLIENT_TIMEOUT_SECS = 10
+CLIENT_TIMEOUT = timedelta(seconds=10)
 
 class Message(NamedTuple):
     code: str
@@ -49,15 +47,16 @@ class Voting:
             "question": "Question from server",
         }
         self._clients = set()
-        self._prune_thread = threading.Thread(target=self.prune_clients_thread, daemon=True)
-        self._prune_thread.start()
 
-    def prune_clients_thread(self):
-        max_diff = timedelta(seconds=CLIENT_TIMEOUT_SECS)
+    async def prune_clients(self):
         while True:
             now = datetime.now()
-            self._clients = set(c for c in self._clients if now - c.last_seen < max_diff)
-            sleep(CLIENT_TIMEOUT_SECS)
+            live_clients = set(c for c in self._clients if now - c.last_seen < CLIENT_TIMEOUT)
+            diff = self._clients - live_clients
+            self._clients = live_clients
+            if diff:
+                await self.send_votes()
+            await asyncio.sleep(CLIENT_TIMEOUT.seconds)
 
     @property
     def clients(self):
@@ -102,7 +101,9 @@ class Voting:
     async def start(self):
         print(f'running websocket server at {ADDRESS}:{PORT}')
         async with websockets.serve(self.handle_ws, ADDRESS, PORT):
+            asyncio.create_task(self.prune_clients())
             await asyncio.Future()  # run forever
 
-voting = Voting()
-asyncio.run(voting.start())
+if __name__ == '__main__':
+    voting = Voting()
+    asyncio.run(voting.start())

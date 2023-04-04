@@ -8,7 +8,7 @@ const WS_BACKEND = "wss://live-voting-socket.onrender.com";
 const App = () => {
 
   const [ballot, setBallot] = useState({
-    choices: ["Choice 1", "Choice 2"],
+    choices: ["Choice 1", "Choice 2", "Choice 3", "Choice 4"],
     question: "Question",
   });
 
