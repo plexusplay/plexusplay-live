@@ -62,19 +62,19 @@ const App = () => {
     }
   }
 
-  const sendMessage = (message) => {
+  const sendMessage = (code, data) => {
+    const message = JSON.stringify({
+      userId: userId,
+      code: code,
+      data: data,
+    });
     console.log('sending ' + message + ' to server');
     ws.current.send(message);
   }
 
   const sendVote = (choice) => {
     setChoice(choice);
-    const message = {
-      userId: userId,
-      code: 'vote',
-      data: choice,
-    }
-    sendMessage(JSON.stringify(message));
+    sendMessage('vote', choice);
   }
 
   return (
