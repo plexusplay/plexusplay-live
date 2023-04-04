@@ -3,7 +3,6 @@ import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 import json
-from pprint import pprint
 from time import sleep
 import threading
 from typing import NamedTuple
@@ -46,18 +45,19 @@ class Client:
 class Voting:
     def __init__(self):
         self.ballot = {
-            "choices": ["Choice 1 from server", "Choice 2 from server"],
+            "choices": ["Choice 1 from server", "Choice 2 from server", "Choice 3 from server", "Choice 4 from server"],
             "question": "Question from server",
         }
         self._clients = set()
-        threading.Thread(target=self.prune_clients_thread, daemon=True).start()
+        self._prune_thread = threading.Thread(target=self.prune_clients_thread, daemon=True)
+        self._prune_thread.start()
 
     def prune_clients_thread(self):
         max_diff = timedelta(seconds=CLIENT_TIMEOUT_SECS)
         while True:
             now = datetime.now()
             self._clients = set(c for c in self._clients if now - c.last_seen < max_diff)
-            sleep(5)
+            sleep(CLIENT_TIMEOUT_SECS)
 
     @property
     def clients(self):
@@ -97,8 +97,6 @@ class Voting:
         async for message in websocket:
             await self.handle_message(client, message)
         # websocket closes
-        self._clients.remove(websocket)
-        del self.votes[websocket]
         await self.send_votes()
 
     async def start(self):

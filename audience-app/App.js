@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { StyleSheet, View, Text, Pressable } from 'react-native';
 
 
+// const WS_BACKEND = "ws://rumpus:8080";
 const WS_BACKEND = "wss://live-voting-socket.onrender.com";
 
 const App = () => {
@@ -68,18 +69,14 @@ const App = () => {
       <View style={{ flex: 1, backgroundColor: 'red' }} >
         <Text style={[styles.big, styles.question]}>{ballot.question}</Text>
       </View>
-      <Pressable style={{ flex: 3, backgroundColor: 'darkorange' }}
-        onPress={() => sendVote(0)}  >
-        <Text style={[styles.big, styles.choice, choice === 0 ? styles.selected : styles.unSelected]}>
-            {ballot.choices[0]} ({votes[0]})
+      {ballot.choices.map((curChoice, i, _) => {
+        const isSelected = choice === i;
+        return <Pressable style={[styles.choice, isSelected ? styles.selectedChoice : styles.unselectedChoice]} onPress={() => sendVote(i)} key={i}>
+        <Text style={[styles.big, styles.choiceText, isSelected ? styles.selectedText : styles.unselectedText]}>
+            {curChoice} ({votes[i]})
         </Text>
       </Pressable>
-      <Pressable style={{ flex: 3, backgroundColor: 'green' }} 
-        onPress={() => sendVote(1)}  >
-        <Text style={[styles.big, styles.choice, choice === 1 ? styles.selected : styles.unSelected]}>
-          {ballot.choices[1]} ({votes[1]})
-        </Text>
-      </Pressable>
+      })}
     </View>
   );
 };
@@ -89,6 +86,15 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'column',
   },
+  choice: {
+    flex: 3,
+  },
+  unselectedChoice: {
+    backgroundColor: 'grey',
+  },
+  selectedChoice: {
+    backgroundColor: 'lightblue',
+  },
   big: {
     fontSize: 24,
     marginLeft: 'auto',
@@ -97,14 +103,14 @@ const styles = StyleSheet.create({
   question: {
     marginTop: 'auto',
   },
-  choice: {
+  choiceText: {
     marginTop: 'auto',
     marginBottom: 'auto',
   },
-  selected: {
+  selectedText: {
     fontWeight: 'bold',
   },
-  unSelected: {
+  unselectedText: {
     fontWeight: 'normal',
   },
 });
