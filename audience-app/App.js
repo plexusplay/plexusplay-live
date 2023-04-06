@@ -1,12 +1,15 @@
+// Standard libraries
 import { useState, useRef, useEffect } from 'react';
 import { StyleSheet, View, Text, Pressable } from 'react-native';
+
+// Third-party libraries
+import ReconnectingWebSocket from 'reconnecting-websocket';
 
 
 // const WS_BACKEND = "ws://rumpus:8080";
 const WS_BACKEND = "wss://live-voting-socket.onrender.com";
 
 const App = () => {
-
   const [ballot, setBallot] = useState({
     choices: ["Choice 1", "Choice 2", "Choice 3", "Choice 4"],
     question: "Question",
@@ -20,9 +23,10 @@ const App = () => {
 
   // Set up WebSocket
   useEffect(() => {
-    ws.current = new WebSocket(WS_BACKEND);
-    ws.current.onmessage = receiveMessage;
-    return () => ws.current.close();
+    const sock = new ReconnectingWebSocket(WS_BACKEND);
+    sock.onmessage = receiveMessage;
+    ws.current = sock;
+    return () => sock.close();
   }, []);
 
   // Set up heartbeat
@@ -55,12 +59,14 @@ const App = () => {
       code: code,
       data: data,
     });
-    ws.current.send(message);
+    if (ws.current !== null) {
+      ws.current.send(message);
+    }
   }
 
-  const sendVote = (choice) => {
-    setChoice(choice);
-    sendMessage('vote', choice);
+  const choose = (chosen) => {
+    setChoice(chosen);
+    sendMessage('vote', chosen);
   }
 
   return (
@@ -71,7 +77,7 @@ const App = () => {
       </View>
       {ballot.choices.map((curChoice, i, _) => {
         const isSelected = choice === i;
-        return <Pressable style={[styles.choice, isSelected ? styles.selectedChoice : styles.unselectedChoice]} onPress={() => sendVote(i)} key={i}>
+        return <Pressable style={[styles.choice, isSelected ? styles.selectedChoice : styles.unselectedChoice]} onPress={() => choose(i)} key={i}>
         <Text style={[styles.big, styles.choiceText, isSelected ? styles.selectedText : styles.unselectedText]}>
             {curChoice} ({votes[i]})
         </Text>
@@ -88,6 +94,7 @@ const styles = StyleSheet.create({
   },
   choice: {
     flex: 3,
+    borderWidth: 1,
   },
   unselectedChoice: {
     backgroundColor: 'grey',

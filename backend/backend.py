@@ -12,8 +12,6 @@ from websockets.server import WebSocketServerProtocol
 ADDRESS = '0.0.0.0'
 PORT = 8080
 
-NUM_QUESTIONS = 4
-
 CLIENT_TIMEOUT = timedelta(seconds=10)
 
 class Message(NamedTuple):
@@ -51,7 +49,7 @@ class Voting:
     async def prune_clients(self):
         while True:
             now = datetime.now()
-            live_clients = set(c for c in self._clients if now - c.last_seen < CLIENT_TIMEOUT)
+            live_clients = {c for c in self._clients if now - c.last_seen < CLIENT_TIMEOUT or c.path == '/admin'}
             diff = self._clients - live_clients
             self._clients = live_clients
             if diff:
@@ -64,7 +62,8 @@ class Voting:
 
     @property
     def votes(self):
-        return [len([c for c in self._clients if c.vote == x]) for x in range(NUM_QUESTIONS)]
+        return [len([c for c in self._clients if c.vote == x])
+                for x in range(len(self.ballot['choices']))]
 
     async def send_votes(self):
         code, data = 'setVotes', self.votes
@@ -83,20 +82,22 @@ class Voting:
             client.vote = data
             await self.send_votes()
         elif code == 'setBallot':
-            ballot = data
-            await self.send_to_all('setBallot', ballot)
+            self.ballot = data
+            await self.send_to_all('setBallot', self.ballot)
 
     async def handle_ws(self, websocket, path):
-        if path != '/':
+        if path != '/' and path != '/admin':
             return
         client = Client(path=path, ws=websocket, last_seen=datetime.now())
         self._clients.add(client)
+        print(f'{websocket} connected')
         await self.send_votes()
         await self.send_to_all('setBallot', self.ballot)
         async for message in websocket:
             await self.handle_message(client, message)
         # websocket closes
         await self.send_votes()
+        print(f'{websocket} disconnected')
 
     async def start(self):
         print(f'running websocket server at {ADDRESS}:{PORT}')
