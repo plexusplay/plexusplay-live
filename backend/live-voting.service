@@ -1,0 +1,8 @@
+[Unit]
+Description=Live Voting WebSocket Backend
+
+[Service]
+ExecStart=/root/live-voting/backend/run_backend.sh
+
+[Install]
+WantedBy=multi-user.target
