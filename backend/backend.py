@@ -1,18 +1,31 @@
+"""Live Voting Backend.
+Usage:
+    backend.py run_secure <cert> <key> [--port=NUM]
+    backend.py [--port=NUM]
+    backend.py -h | --help
+    backend.py --version
+
+Options:
+    -h --help     Show this screen.
+    --version     Show version.
+    --port=NUM    Set the port number to serve on [default: 8080].
+"""
 # Standard libraries
 import asyncio
 import json
 import logging
 import os
+import ssl
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import NamedTuple, Optional
 
 # Third-party libraries
 import websockets
+from docopt import docopt
 from websockets.server import WebSocketServerProtocol
 
 ADDRESS = '0.0.0.0'
-PORT = 8080
 
 ANONYMOUS_CLIENT_TIMEOUT = timedelta(seconds=10)
 NAMED_CLIENT_TIMEOUT = timedelta(minutes=5)
@@ -59,13 +72,25 @@ class Client:
 
 
 class Voting:
-    def __init__(self):
+    def __init__(self, args):
+        self.ssl_context: Optional[ssl.SSLContext] = self.create_ssl_context(args['<cert>'], args['<key>'])
+        self.port = int(args['--port'])
         self.ballot = {
             "choices": ["Choice 1 from server", "Choice 2 from server", "Choice 3 from server", "Choice 4 from server"],
             "question": "Question from server",
         }
         self._clients: set[Client] = set()
         self._votes = {}
+
+    def create_ssl_context(self, certpath, keyfile):
+        if certpath is None:
+            logging.info('SSL disabled')
+            return None
+        ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        ssl_context.load_cert_chain(certpath, keyfile=keyfile)
+        logging.info(f'SSL enabled using {certpath}')
+        return ssl_context
+
 
     def is_client_alive(self, c: Client):
         idle_time = datetime.now() - c.last_seen
@@ -137,13 +162,14 @@ class Voting:
         logging.info(f'{websocket} disconnected')
 
     async def start(self):
-        logging.info(f'running websocket server at {ADDRESS}:{PORT}')
-        async with websockets.serve(self.handle_ws, ADDRESS, PORT):
+        logging.info(f'running websocket server at {ADDRESS}:{self.port}')
+        async with websockets.serve(self.handle_ws, ADDRESS, self.port, ssl=self.ssl_context):
             asyncio.create_task(self.prune_clients())
             await asyncio.Future()  # run forever
 
 
 if __name__ == '__main__':
     setup_logging()
-    voting = Voting()
+    args = docopt(__doc__, version="Live Voting Backend 0.1")
+    voting = Voting(args)
     asyncio.run(voting.start())
