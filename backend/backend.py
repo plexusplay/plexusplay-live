@@ -2,6 +2,7 @@
 import asyncio
 import json
 import logging
+import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import NamedTuple, Optional
@@ -18,6 +19,8 @@ NAMED_CLIENT_TIMEOUT = timedelta(minutes=5)
 
 
 def setup_logging():
+    if not os.path.exists('logs'):
+        os.makedirs('logs')
     logging.basicConfig(filename=datetime.now().strftime('logs/%Y-%m-%d-%H:%M:%S.log'), level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
     console = logging.StreamHandler()
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
