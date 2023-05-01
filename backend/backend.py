@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 import json
 from typing import NamedTuple, Optional
+import logging
 
 # Third-party libraries
 import websockets
@@ -14,6 +15,14 @@ PORT = 8080
 
 ANONYMOUS_CLIENT_TIMEOUT = timedelta(seconds=10)
 NAMED_CLIENT_TIMEOUT = timedelta(minutes=5)
+
+logging.basicConfig(filename=datetime.now().strftime('logs/%Y-%m-%d-%H:%M:%S.log'), level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+console = logging.StreamHandler()
+console.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+console.setFormatter(formatter)
+logging.getLogger('').addHandler(console)
 
 class Message(NamedTuple):
     code: str
@@ -90,7 +99,7 @@ class Voting:
 
     async def handle_message(self, client: Client, message):
         message = json.loads(message)
-        print(f'{client}: {message}')
+        logging.debug(f'{client}: {message}')
         code, data, userId = message['code'], message['data'], message['userId']
         client.last_seen = datetime.now()
         if client.userId is None:
@@ -108,17 +117,17 @@ class Voting:
             return
         client = Client(path=path, ws=websocket, last_seen=datetime.now(), userId=None)
         self._clients.add(client)
-        print(f'{websocket} connected')
+        logging.info(f'{websocket} connected')
         await self.send_votes()
         await self.send_to_all('setBallot', self.ballot)
         async for message in websocket:
             await self.handle_message(client, message)
         # websocket closes
         await self.send_votes()
-        print(f'{websocket} disconnected')
+        logging.info(f'{websocket} disconnected')
 
     async def start(self):
-        print(f'running websocket server at {ADDRESS}:{PORT}')
+        logging.info(f'running websocket server at {ADDRESS}:{PORT}')
         async with websockets.serve(self.handle_ws, ADDRESS, PORT):
             asyncio.create_task(self.prune_clients())
             await asyncio.Future()  # run forever
