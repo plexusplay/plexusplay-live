@@ -9,7 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 
 // const WS_BACKEND = "ws://rumpus:8080";
-const WS_BACKEND = "wss://live-voting-socket.onrender.com";
+const WS_BACKEND = "wss://voting-socket.rumpus.club";
 
 const App = () => {
   const [ballot, setBallot] = useState({
