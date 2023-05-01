@@ -3,7 +3,7 @@ import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 import json
-from typing import NamedTuple
+from typing import NamedTuple, Optional
 
 # Third-party libraries
 import websockets
@@ -12,7 +12,8 @@ from websockets.server import WebSocketServerProtocol
 ADDRESS = '0.0.0.0'
 PORT = 8080
 
-CLIENT_TIMEOUT = timedelta(seconds=10)
+ANONYMOUS_CLIENT_TIMEOUT = timedelta(seconds=10)
+NAMED_CLIENT_TIMEOUT = timedelta(minutes=5)
 
 class Message(NamedTuple):
     code: str
@@ -26,8 +27,8 @@ class Message(NamedTuple):
 class Client:
     path: str
     ws: WebSocketServerProtocol
+    userId: Optional[str]
     last_seen: datetime
-    vote: int = -1
 
     def __eq__(self, __value: object) -> bool:
         if not hasattr(__value, 'ws'):
@@ -44,17 +45,24 @@ class Voting:
             "choices": ["Choice 1 from server", "Choice 2 from server", "Choice 3 from server", "Choice 4 from server"],
             "question": "Question from server",
         }
-        self._clients = set()
+        self._clients: set[Client] = set()
+        self._votes = {}
+
+    def is_client_alive(self, c: Client):
+        idle_time = datetime.now() - c.last_seen
+        if c.userId:
+            return idle_time < ANONYMOUS_CLIENT_TIMEOUT
+        else:
+            return idle_time < NAMED_CLIENT_TIMEOUT
 
     async def prune_clients(self):
         while True:
-            now = datetime.now()
-            live_clients = {c for c in self._clients if now - c.last_seen < CLIENT_TIMEOUT or c.path == '/admin'}
+            live_clients = {c for c in self._clients if self.is_client_alive(c) or c.path == '/admin'}
             diff = self._clients - live_clients
             self._clients = live_clients
             if diff:
                 await self.send_votes()
-            await asyncio.sleep(CLIENT_TIMEOUT.seconds)
+            await asyncio.sleep(ANONYMOUS_CLIENT_TIMEOUT.seconds)
 
     @property
     def clients(self):
@@ -62,8 +70,14 @@ class Voting:
 
     @property
     def votes(self):
-        return [len([c for c in self._clients if c.vote == x])
-                for x in range(len(self.ballot['choices']))]
+        results = [0] * len(self.ballot['choices'])
+        for v in self._votes.values():
+            if v != -1:
+                try:
+                    results[v] += 1
+                except IndexError:
+                    pass
+        return results
 
     async def send_votes(self):
         code, data = 'setVotes', self.votes
@@ -76,9 +90,13 @@ class Voting:
 
     async def handle_message(self, client: Client, message):
         message = json.loads(message)
-        code, data = message['code'], message['data']
+        print(f'{client}: {message}')
+        code, data, userId = message['code'], message['data'], message['userId']
         client.last_seen = datetime.now()
+        if client.userId is None:
+            client.userId = userId
         if code == 'vote':
+            self._votes[client.userId] = data
             client.vote = data
             await self.send_votes()
         elif code == 'setBallot':
@@ -88,7 +106,7 @@ class Voting:
     async def handle_ws(self, websocket, path):
         if path != '/' and path != '/admin':
             return
-        client = Client(path=path, ws=websocket, last_seen=datetime.now())
+        client = Client(path=path, ws=websocket, last_seen=datetime.now(), userId=None)
         self._clients.add(client)
         print(f'{websocket} connected')
         await self.send_votes()
@@ -104,6 +122,7 @@ class Voting:
         async with websockets.serve(self.handle_ws, ADDRESS, PORT):
             asyncio.create_task(self.prune_clients())
             await asyncio.Future()  # run forever
+
 
 if __name__ == '__main__':
     voting = Voting()

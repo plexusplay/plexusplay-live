@@ -4,6 +4,8 @@ import { StyleSheet, View, Text, Pressable } from 'react-native';
 
 // Third-party libraries
 import ReconnectingWebSocket from 'reconnecting-websocket';
+import { uniqueNamesGenerator, adjectives, colors, animals } from 'unique-names-generator';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 
 // const WS_BACKEND = "ws://rumpus:8080";
@@ -19,7 +21,25 @@ const App = () => {
 
   const [choice, setChoice] = useState(-1);
 
+  const [userId, setUserId] = useState("userId");
+
   const ws = useRef(null);
+
+  //  Set up unique name
+  useEffect(() => {
+    AsyncStorage.getItem('userId').then((maybeUserId) => {
+      if (maybeUserId !== null) {
+        setUserId(maybeUserId);
+      } else { // No userId exists
+        const uniqueUserId = uniqueNamesGenerator({
+          dictionaries: [adjectives, colors, animals],
+        });
+        AsyncStorage.setItem('userId', uniqueUserId).then(() => {
+          setUserId(uniqueUserId);
+        });
+      }
+    });
+  }, []);
 
   // Set up WebSocket
   useEffect(() => {
@@ -58,6 +78,7 @@ const App = () => {
     const message = JSON.stringify({
       code: code,
       data: data,
+      userId: userId,
     });
     if (ws.current !== null) {
       ws.current.send(message);
