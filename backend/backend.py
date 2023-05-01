@@ -28,7 +28,7 @@ from websockets.server import WebSocketServerProtocol
 ADDRESS = '0.0.0.0'
 
 ANONYMOUS_CLIENT_TIMEOUT = timedelta(seconds=10)
-NAMED_CLIENT_TIMEOUT = timedelta(minutes=5)
+NAMED_CLIENT_TIMEOUT = timedelta(hours=1)
 
 
 def setup_logging():
