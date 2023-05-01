@@ -1,10 +1,10 @@
 # Standard libraries
 import asyncio
+import json
+import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-import json
 from typing import NamedTuple, Optional
-import logging
 
 # Third-party libraries
 import websockets
@@ -16,13 +16,15 @@ PORT = 8080
 ANONYMOUS_CLIENT_TIMEOUT = timedelta(seconds=10)
 NAMED_CLIENT_TIMEOUT = timedelta(minutes=5)
 
-logging.basicConfig(filename=datetime.now().strftime('logs/%Y-%m-%d-%H:%M:%S.log'), level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-console = logging.StreamHandler()
-console.setLevel(logging.INFO)
-formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-console.setFormatter(formatter)
-logging.getLogger('').addHandler(console)
+def setup_logging():
+    logging.basicConfig(filename=datetime.now().strftime('logs/%Y-%m-%d-%H:%M:%S.log'), level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+    console = logging.StreamHandler()
+    console.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    console.setFormatter(formatter)
+    logging.getLogger('').addHandler(console)
+
 
 class Message(NamedTuple):
     code: str
@@ -46,6 +48,12 @@ class Client:
 
     def __hash__(self) -> int:
         return self.ws.__hash__()
+
+    def __str__(self):
+        if self.userId:
+            return self.userId
+        else:
+            return str(self.ws)
 
 
 class Voting:
@@ -134,5 +142,6 @@ class Voting:
 
 
 if __name__ == '__main__':
+    setup_logging()
     voting = Voting()
     asyncio.run(voting.start())
