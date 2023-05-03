@@ -91,13 +91,12 @@ class Voting:
         logging.info(f'SSL enabled using {certpath}')
         return ssl_context
 
-
     def is_client_alive(self, c: Client):
         idle_time = datetime.now() - c.last_seen
         if c.userId:
-            return idle_time < ANONYMOUS_CLIENT_TIMEOUT
-        else:
             return idle_time < NAMED_CLIENT_TIMEOUT
+        else:
+            return idle_time < ANONYMOUS_CLIENT_TIMEOUT
 
     async def prune_clients(self):
         while True:
@@ -167,7 +166,7 @@ class Voting:
     async def start(self):
         logging.info(f'running websocket server at {ADDRESS}:{self.port}')
         async with websockets.serve(self.handle_ws, ADDRESS, self.port, ssl=self.ssl_context):
-            # asyncio.create_task(self.prune_clients())
+            asyncio.create_task(self.prune_clients())
             await asyncio.Future()  # run forever
 
 
