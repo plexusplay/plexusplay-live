@@ -132,6 +132,10 @@ class Voting:
         # Do this asynchronously so a bad client doesn't freeze everyone
         websockets.broadcast(self.clients, message)
 
+    async def send_to_one(self, code, data, ws):
+        message = Message(code, data).serialize()
+        await ws.send(message)
+
     async def handle_message(self, client: Client, message):
         message = json.loads(message)
         logging.debug(f'{client}: {message}')
@@ -154,7 +158,7 @@ class Voting:
         self._clients.add(client)
         logging.info(f'{websocket} connected')
         await self.send_votes()
-        await self.send_to_all('setBallot', self.ballot)
+        await self.send_to_one('setBallot', self.ballot, websocket)
         async for message in websocket:
             await self.handle_message(client, message)
         # websocket closes
