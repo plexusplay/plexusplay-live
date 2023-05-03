@@ -27,7 +27,7 @@ from websockets.server import WebSocketServerProtocol
 
 ADDRESS = '0.0.0.0'
 
-ANONYMOUS_CLIENT_TIMEOUT = timedelta(seconds=10)
+ANONYMOUS_CLIENT_TIMEOUT = timedelta(seconds=30)
 NAMED_CLIENT_TIMEOUT = timedelta(hours=1)
 
 
