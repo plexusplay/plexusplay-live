@@ -145,7 +145,6 @@ class Voting:
             client.userId = userId
         if code == 'vote':
             self._votes[client.userId] = data
-            client.vote = data
             await self.send_votes()
         elif code == 'setBallot':
             self.ballot = data
