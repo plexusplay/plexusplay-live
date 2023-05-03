@@ -167,7 +167,7 @@ class Voting:
     async def start(self):
         logging.info(f'running websocket server at {ADDRESS}:{self.port}')
         async with websockets.serve(self.handle_ws, ADDRESS, self.port, ssl=self.ssl_context):
-            asyncio.create_task(self.prune_clients())
+            # asyncio.create_task(self.prune_clients())
             await asyncio.Future()  # run forever
 
 
