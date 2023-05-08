@@ -69,6 +69,8 @@ const App = () => {
       const oldBallot = {...ballot};
       const merged = Object.assign(oldBallot, data);
       setBallot(merged);
+      // When the ballot changes, reset client vote
+      setChoice(-1);
     } else if (code === 'setVotes') {
       setVotes(data);
     }

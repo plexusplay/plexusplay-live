@@ -103,13 +103,14 @@ class Voting:
             live_clients = {c for c in self._clients if self.is_client_alive(c) or c.path == '/admin'}
             diff = self._clients - live_clients
             self._clients = live_clients
+            # Prune the votes as well
+            active_named_users = {c.userId for c in self._clients}
+            for userId in self._votes.keys():
+                if userId not in active_named_users:
+                    self._votes.pop(userId, None)
             if diff:
                 await self.send_votes()
             await asyncio.sleep(ANONYMOUS_CLIENT_TIMEOUT.seconds)
-
-    @property
-    def clients(self):
-        return set(c.ws for c in self._clients)
 
     @property
     def votes(self):
@@ -122,23 +123,36 @@ class Voting:
                     pass
         return results
 
+    @property
+    def metadata(self):
+        return {
+            'connections': len(self._clients),
+            'users': len(self._votes),
+        }
+
     async def send_votes(self):
-        code, data = 'setVotes', self.votes
-        await self.send_to_all(code, data)
+        await self.send_to_all('setVotes', self.votes)
+        await self.send_to_admins('metadata', self.metadata)
 
     async def send_to_all(self, code, data):
-        message = Message(code, data).serialize()
-        # Do this asynchronously so a bad client doesn't freeze everyone
-        websockets.broadcast(self.clients, message)
+        clients = (c.ws for c in self._clients)
+        websockets.broadcast(clients, Message(code, data).serialize())
+
+    async def send_to_admins(self, code, data):
+        admin_ws = (c.ws for c in self._clients if c.path == '/admin')
+        websockets.broadcast(admin_ws, Message(code, data).serialize())
 
     async def send_to_one(self, code, data, ws):
-        message = Message(code, data).serialize()
-        await ws.send(message)
+        await ws.send(Message(code, data).serialize())
 
     async def handle_message(self, client: Client, message):
-        message = json.loads(message)
         logging.debug(f'{client}: {message}')
-        code, data, userId = message['code'], message['data'], message['userId']
+        try:
+            message = json.loads(message)
+            code, data, userId = message['code'], message['data'], message['userId']
+        except (json.JSONDecodeError, KeyError):
+            logging.info(f'{client} sent invalid message\n{message}')
+            return
         client.last_seen = datetime.now()
         if client.userId is None:
             client.userId = userId
@@ -147,7 +161,10 @@ class Voting:
             await self.send_votes()
         elif code == 'setBallot':
             self.ballot = data
+            self._votes.clear()
             await self.send_to_all('setBallot', self.ballot)
+            await self.send_votes()
+
 
     async def handle_ws(self, websocket, path):
         if path != '/' and path != '/admin':
