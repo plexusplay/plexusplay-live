@@ -9,12 +9,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 
 // const WS_BACKEND = "ws://rumpus:8080";
-const WS_BACKEND = "wss://voting-socket.rumpus.club";
+// const WS_BACKEND = "wss://voting-socket.rumpus.club";
+const WS_BACKEND = "ws://localhost:8080";
 
 const App = () => {
   const [ballot, setBallot] = useState({
     choices: ["Choice 1", "Choice 2", "Choice 3", "Choice 4"],
     question: "Question",
+    expires: undefined,
   });
 
   const [votes, setVotes] = useState([]);
@@ -22,6 +24,10 @@ const App = () => {
   const [choice, setChoice] = useState(-1);
 
   const [userId, setUserId] = useState("userId");
+
+  const [timeLeft, setTimeLeft] = useState(0);
+
+  const [buttonsDisabled, setButtonsDisabled] = useState(false);
 
   const ws = useRef(null);
 
@@ -66,9 +72,8 @@ const App = () => {
     const code = message['code'];
     const data = message['data'];
     if (code === 'setBallot') {
-      const oldBallot = {...ballot};
-      const merged = Object.assign(oldBallot, data);
-      setBallot(merged);
+      setBallot(data);
+      setButtonsDisabled(false);
       // When the ballot changes, reset client vote
       setChoice(-1);
     } else if (code === 'setVotes') {
@@ -92,15 +97,41 @@ const App = () => {
     sendMessage('vote', chosen);
   }
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Math.floor(Date.now() / 1000);
+      const secondsRemaining = ballot.expires - now;
+      // on expiration stop the timer, and disable vote buttons
+      if (secondsRemaining <= 0) {
+        setTimeLeft(0);
+        clearInterval(interval);
+        setButtonsDisabled(true);
+      } else {
+        console.warn(secondsRemaining);
+        setTimeLeft(secondsRemaining);
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [ballot.expires]);
+
+  const backgroundColor = () => {
+    if (timeLeft <= 10) return 'red'
+    if (timeLeft <= 30 && timeLeft > 10) return 'yellow'
+    return 'green'
+  }
+
   return (
     <View
       style={styles.container}>
-      <View style={{ flex: 1, backgroundColor: 'red' }} >
-        <Text style={[styles.big, styles.question]}>{ballot.question}</Text>
+      <View style={{ flex: 1, backgroundColor: backgroundColor()  }}>
+        <View style={styles.header}>
+          <Text style={[styles.big, styles.timeLeft]}>{timeLeft}</Text>
+          <Text style={[styles.big, styles.question]}>{ballot.question}</Text>
+        </View>
       </View>
       {ballot.choices.map((curChoice, i, _) => {
         const isSelected = choice === i;
-        return <Pressable style={[styles.choice, isSelected ? styles.selectedChoice : styles.unselectedChoice]} onPress={() => choose(i)} key={i}>
+        return <Pressable disabled={buttonsDisabled} style={[styles.choice, isSelected ? styles.selectedChoice : styles.unselectedChoice]} onPress={() => choose(i)} key={i}>
         <Text style={[styles.big, styles.choiceText, isSelected ? styles.selectedText : styles.unselectedText]}>
             {curChoice} ({votes[i]})
         </Text>
@@ -144,6 +175,5 @@ const styles = StyleSheet.create({
     fontWeight: 'normal',
   },
 });
-
 
 export default App;

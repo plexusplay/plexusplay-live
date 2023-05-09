@@ -78,6 +78,7 @@ class Voting:
         self.ballot = {
             "choices": ["Choice 1 from server", "Choice 2 from server", "Choice 3 from server", "Choice 4 from server"],
             "question": "Question from server",
+            "expires": None
         }
         self._clients: set[Client] = set()
         self._votes = {}
