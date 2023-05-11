@@ -1,7 +1,7 @@
 """Live Voting Backend.
 Usage:
-    backend.py run_secure <cert> <key> [--port=NUM]
-    backend.py [--port=NUM]
+    backend.py run_secure <cert> <key> [--port=NUM] [--log=LEVEL]
+    backend.py [--port=NUM] [--log=LEVEL]
     backend.py -h | --help
     backend.py --version
 
@@ -9,6 +9,7 @@ Options:
     -h --help     Show this screen.
     --version     Show version.
     --port=NUM    Set the port number to serve on [default: 8080].
+    --log=LEVEL   Set the logging level [default: INFO].
 """
 # Standard libraries
 import asyncio
@@ -31,10 +32,14 @@ ANONYMOUS_CLIENT_TIMEOUT = timedelta(seconds=30)
 NAMED_CLIENT_TIMEOUT = timedelta(hours=1)
 
 
-def setup_logging():
+def setup_logging(args):
     if not os.path.exists('logs'):
         os.makedirs('logs')
-    logging.basicConfig(filename=datetime.now().strftime('logs/%Y-%m-%d-%H:%M:%S.log'), level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+    loglevel = args['--log']
+    numeric_level = getattr(logging, loglevel.upper(), None)
+    if not isinstance(numeric_level, int):
+        raise ValueError('Invalid log level: %s' % loglevel)
+    logging.basicConfig(filename=datetime.now().strftime('logs/%Y-%m-%d-%H:%M:%S.log'), level=numeric_level, format='%(asctime)s - %(levelname)s - %(message)s')
     console = logging.StreamHandler()
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     console.setFormatter(formatter)
@@ -106,7 +111,8 @@ class Voting:
             self._clients = live_clients
             # Prune the votes as well
             active_named_users = {c.userId for c in self._clients}
-            for userId in self._votes.keys():
+            all_users = set(self._votes.keys())
+            for userId in all_users:
                 if userId not in active_named_users:
                     self._votes.pop(userId, None)
             if diff:
@@ -151,13 +157,20 @@ class Voting:
         try:
             message = json.loads(message)
             code, data, userId = message['code'], message['data'], message['userId']
-        except (json.JSONDecodeError, KeyError):
+        except (json.JSONDecodeError, KeyError, TypeError):
             logging.info(f'{client} sent invalid message\n{message}')
             return
         client.last_seen = datetime.now()
         if client.userId is None:
             client.userId = userId
         if code == 'vote':
+            try:
+                data = int(data)
+                if data < 0 or data > len(self.ballot['choices']):
+                    raise ValueError
+            except ValueError:
+                logging.debug(f'{client} sent invalid vote: {data}')
+                return
             self._votes[client.userId] = data
             await self.send_votes()
         elif code == 'setBallot':
@@ -178,6 +191,7 @@ class Voting:
         async for message in websocket:
             await self.handle_message(client, message)
         # websocket closes
+        self._clients.remove(client)
         await self.send_votes()
         logging.info(f'{websocket} disconnected')
 
@@ -189,7 +203,7 @@ class Voting:
 
 
 if __name__ == '__main__':
-    setup_logging()
     args = docopt(__doc__, version="Live Voting Backend 0.1")
+    setup_logging(args)
     voting = Voting(args)
     asyncio.run(voting.start())
