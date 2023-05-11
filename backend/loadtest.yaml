@@ -1,0 +1,18 @@
+config:
+  target: "ws://127.0.0.1:8080"
+  phases:
+    - duration: 30
+      arrivalRate: 25
+      maxVusers: 300
+    - pause: 10
+
+scenarios:
+  - engine: "ws"
+    flow:
+      - loop:
+        - send:
+            code: "vote"
+            data: "{{ $randomNumber(0, 3) }}"
+            userId: "{{ $randomString() }}"
+        - think: 1
+        count: 5
