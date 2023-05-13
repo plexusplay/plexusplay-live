@@ -25,6 +25,7 @@ from typing import NamedTuple, Optional
 import websockets
 from docopt import docopt
 from websockets.server import WebSocketServerProtocol
+from websockets.exceptions import ConnectionClosed
 
 ADDRESS = '0.0.0.0'
 
@@ -150,7 +151,11 @@ class Voting:
         websockets.broadcast(admin_ws, Message(code, data).serialize())
 
     async def send_to_one(self, code, data, ws):
-        await ws.send(Message(code, data).serialize())
+        message = Message(code, data).serialize()
+        try:
+            await ws.send(message)
+        except ConnectionClosed:
+            logging.debug(f'tried to send {message} to closed client {ws}')
 
     async def handle_message(self, client: Client, message):
         logging.debug(f'{client}: {message}')
