@@ -25,7 +25,7 @@ from typing import NamedTuple, Optional
 import websockets
 from docopt import docopt
 from websockets.server import WebSocketServerProtocol
-from websockets.exceptions import ConnectionClosed
+from websockets.exceptions import ConnectionClosed, WebSocketException
 
 ADDRESS = '0.0.0.0'
 
@@ -193,8 +193,11 @@ class Voting:
         logging.info(f'{websocket} connected')
         await self.send_votes()
         await self.send_to_one('setBallot', self.ballot, websocket)
-        async for message in websocket:
-            await self.handle_message(client, message)
+        try:
+            async for message in websocket:
+                await self.handle_message(client, message)
+        except WebSocketException:
+            logging.debug(f'{client} exited disgracefully')
         # websocket closes
         self._clients.remove(client)
         await self.send_votes()
