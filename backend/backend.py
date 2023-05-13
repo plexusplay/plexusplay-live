@@ -44,7 +44,7 @@ def setup_logging(args):
     console = logging.StreamHandler()
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     console.setFormatter(formatter)
-    logging.getLogger('').addHandler(console)
+    logging.getLogger('backend').addHandler(console)
 
 
 class Message(NamedTuple):
