@@ -163,7 +163,7 @@ class Voting:
             message = json.loads(message)
             code, data, userId = message['code'], message['data'], message['userId']
         except (json.JSONDecodeError, KeyError, TypeError):
-            logging.info(f'{client} sent invalid message\n{message}')
+            logging.debug(f'{client} sent invalid message\n{message}')
             return
         client.last_seen = datetime.now()
         if client.userId is None:
