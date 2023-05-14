@@ -157,7 +157,7 @@ class Voting:
         try:
             await ws.send(message)
         except ConnectionClosed:
-            logger.debug(f'tried to send {message} to closed client {ws}')
+            logger.warn(f'tried to send {message} to closed client {ws}')
 
     async def handle_message(self, client: Client, message):
         logger.debug(f'{client}: {message}')
@@ -165,7 +165,7 @@ class Voting:
             message = json.loads(message)
             code, data, userId = message['code'], message['data'], message['userId']
         except (json.JSONDecodeError, KeyError, TypeError):
-            logger.debug(f'{client} sent invalid message\n{message}')
+            logger.warn(f'{client} sent invalid message\n{message}')
             return
         client.last_seen = datetime.now()
         if client.userId is None:
@@ -176,7 +176,7 @@ class Voting:
                 if data < 0 or data > len(self.ballot['choices']):
                     raise ValueError
             except ValueError:
-                logger.debug(f'{client} sent invalid vote: {data}')
+                logger.warn(f'{client} sent invalid vote: {data}')
                 return
             self._votes[client.userId] = data
             await self.send_votes()
