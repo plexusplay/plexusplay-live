@@ -86,7 +86,8 @@ class Voting:
         self.ballot = {
             "choices": ["Choice 1 from server", "Choice 2 from server", "Choice 3 from server", "Choice 4 from server"],
             "question": "Question from server",
-            "expires": None
+            "expires": None,
+            "duration": 0,
         }
         self._clients: set[Client] = set()
         self._votes = {}
@@ -182,6 +183,7 @@ class Voting:
             await self.send_votes()
         elif code == 'setBallot':
             self.ballot = data
+            self.ballot['duration'] = (datetime.fromtimestamp(self.ballot['expires']) - datetime.now()).seconds
             self._votes.clear()
             await self.send_to_all('setBallot', self.ballot)
             await self.send_votes()

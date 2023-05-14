@@ -9,8 +9,8 @@ import { useFonts } from 'expo-font';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 
-const WS_BACKEND = "ws://rumpus:8080";
-// const WS_BACKEND = "wss://voting-socket.rumpus.club";
+// const WS_BACKEND = "ws://rumpus:8080";
+const WS_BACKEND = "wss://voting-socket.rumpus.club";
 // const WS_BACKEND = "ws://localhost:8080";
 
 const App = () => {
@@ -18,6 +18,7 @@ const App = () => {
     choices: ["Choice 1", "Choice 2", "Choice 3", "Choice 4"],
     question: "Question",
     expires: undefined,
+    duration: 0,
   });
 
   const [votes, setVotes] = useState([]);
@@ -27,8 +28,10 @@ const App = () => {
   const [userId, setUserId] = useState("userId");
 
   const [timeLeft, setTimeLeft] = useState(0);
+  const [timeLeftRatio, setTimeLeftRatio] = useState(0);
 
   const [buttonsDisabled, setButtonsDisabled] = useState(false);
+
 
   const ws = useRef(null);
 
@@ -72,6 +75,26 @@ const App = () => {
     };
   });
 
+  // Set up timer
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const millisRemaining = ballot.expires*1000 - now;
+      const secondsRemaining = Math.floor(millisRemaining / 1000);
+      // on expiration stop the timer, and disable vote buttons
+      if (millisRemaining <= 0) {
+        setTimeLeft(0);
+        clearInterval(interval);
+        setButtonsDisabled(true);
+      } else {
+        setTimeLeft(secondsRemaining);
+        const ratio = millisRemaining / (ballot.duration*1000);
+        setTimeLeftRatio(ratio);
+      }
+    }, 10);
+    return () => clearInterval(interval);
+  }, [ballot.expires]);
+
   const receiveMessage = (msg_event) => {
     const message = JSON.parse(msg_event.data);
     const code = message['code'];
@@ -102,32 +125,34 @@ const App = () => {
     sendMessage('vote', chosen);
   }
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const now = Math.floor(Date.now() / 1000);
-      const secondsRemaining = ballot.expires - now;
-      // on expiration stop the timer, and disable vote buttons
-      if (secondsRemaining <= 0) {
-        setTimeLeft(0);
-        clearInterval(interval);
-        setButtonsDisabled(true);
-      } else {
-        console.warn(secondsRemaining);
-        setTimeLeft(secondsRemaining);
-      }
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [ballot.expires]);
-
   const backgroundColor = () => {
     if (timeLeft <= 10) return 'red'
     if (timeLeft <= 30 && timeLeft > 10) return 'yellow'
     return 'green'
   }
 
+  const visualTimerHeight = () => {
+    const percent = (timeLeftRatio * 100).toFixed(2);
+    return '' + percent + '%';
+  }
+
+  const visualTimerStyle = () => {
+    return {
+            position: 'absolute',
+            backgroundColor: 'orange',
+            width: '100%',
+            height: visualTimerHeight(),
+            zIndex: 1,
+            opacity: '50%',
+            pointerEvents: 'none',
+            bottom: 0,
+            left: 0,
+          }
+  };
+
   return (
     <View style={styles.container}>
-      <View style={styles.visualTimer}></View>
+      <View style={visualTimerStyle()}></View>
       <View style={{ flex: 1, backgroundColor: backgroundColor()  }}>
         <View style={styles.header}>
           <Text style={[styles.big, styles.timeLeft]}>{timeLeft}</Text>
@@ -145,6 +170,7 @@ const App = () => {
     </View>
   );
 };
+
 
 const styles = StyleSheet.create({
   container: {
@@ -184,8 +210,8 @@ const styles = StyleSheet.create({
   visualTimer: {
     position: 'absolute',
     backgroundColor: 'orange',
-    height: '80%',
     width: '100%',
+    height: '50%',
     zIndex: 1,
     opacity: '50%',
     pointerEvents: 'none',

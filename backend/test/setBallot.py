@@ -4,7 +4,7 @@ import asyncio
 from datetime import datetime, timedelta
 
 # set up the WebSocket connection
-websocket_url = "ws://localhost:8080/admin"
+websocket_url = "ws://127.0.0.1:8080/admin"
 websocket = websockets.connect(websocket_url)
 
 # create the new ballot with a question and four answers
