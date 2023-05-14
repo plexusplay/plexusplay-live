@@ -179,7 +179,7 @@ const styles = StyleSheet.create({
     userSelect: 'none',
   },
   choice: {
-    flex: 3,
+    flex: 2,
     borderWidth: 1,
   },
   unselectedChoice: {
@@ -189,7 +189,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'lightblue',
   },
   big: {
-    fontSize: 24,
+    fontSize: '1.2rem',
     fontFamily: 'LemonMilk',
     marginLeft: 'auto',
     marginRight: 'auto',
@@ -207,17 +207,6 @@ const styles = StyleSheet.create({
   unselectedText: {
     fontWeight: 'normal',
   },
-  visualTimer: {
-    position: 'absolute',
-    backgroundColor: 'orange',
-    width: '100%',
-    height: '50%',
-    zIndex: 1,
-    opacity: '50%',
-    pointerEvents: 'none',
-    bottom: 0,
-    left: 0,
-  }
 });
 
 export default App;
