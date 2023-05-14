@@ -5,6 +5,7 @@ import { StyleSheet, View, Text, Pressable } from 'react-native';
 // Third-party libraries
 import ReconnectingWebSocket from 'reconnecting-websocket';
 import { uniqueNamesGenerator, adjectives, colors, animals } from 'unique-names-generator';
+import { useFonts } from 'expo-font';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 
@@ -30,6 +31,10 @@ const App = () => {
   const [buttonsDisabled, setButtonsDisabled] = useState(false);
 
   const ws = useRef(null);
+
+  const [fontsLoaded] = useFonts({
+    'LemonMilk': require('./assets/fonts/lemonmilk-regular.otf'),
+  });
 
   //  Set up unique name
   useEffect(() => {
@@ -145,6 +150,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     flexDirection: 'column',
+    userSelect: 'none',
   },
   choice: {
     flex: 3,
@@ -158,6 +164,7 @@ const styles = StyleSheet.create({
   },
   big: {
     fontSize: 24,
+    fontFamily: 'LemonMilk',
     marginLeft: 'auto',
     marginRight: 'auto',
   },
