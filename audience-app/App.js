@@ -9,8 +9,8 @@ import { useFonts } from 'expo-font';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 
-// const WS_BACKEND = "ws://rumpus:8080";
-const WS_BACKEND = "wss://voting-socket.rumpus.club";
+const WS_BACKEND = "ws://rumpus:8080";
+// const WS_BACKEND = "wss://voting-socket.rumpus.club";
 // const WS_BACKEND = "ws://localhost:8080";
 
 const App = () => {
@@ -126,8 +126,8 @@ const App = () => {
   }
 
   return (
-    <View
-      style={styles.container}>
+    <View style={styles.container}>
+      <View style={styles.visualTimer}></View>
       <View style={{ flex: 1, backgroundColor: backgroundColor()  }}>
         <View style={styles.header}>
           <Text style={[styles.big, styles.timeLeft]}>{timeLeft}</Text>
@@ -181,6 +181,17 @@ const styles = StyleSheet.create({
   unselectedText: {
     fontWeight: 'normal',
   },
+  visualTimer: {
+    position: 'absolute',
+    backgroundColor: 'orange',
+    height: '80%',
+    width: '100%',
+    zIndex: 1,
+    opacity: '50%',
+    pointerEvents: 'none',
+    bottom: 0,
+    left: 0,
+  }
 });
 
 export default App;
