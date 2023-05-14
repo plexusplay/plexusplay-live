@@ -32,5 +32,6 @@ for x in data['intermediate']:
     rows.append(row)
 with open(f'{basename}.csv', 'w') as csvfile:
     writer = csv.writer(csvfile)
+    writer.writerow(['users', 'median', 'p95', 'p99'])
     for r in rows:
         writer.writerow(r)
