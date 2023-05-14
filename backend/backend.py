@@ -32,8 +32,10 @@ ADDRESS = '0.0.0.0'
 ANONYMOUS_CLIENT_TIMEOUT = timedelta(seconds=30)
 NAMED_CLIENT_TIMEOUT = timedelta(hours=1)
 
+logger = logging.getLogger(__name__)
 
 def setup_logging(args):
+    global logger
     if not os.path.exists('logs'):
         os.makedirs('logs')
     loglevel = args['--log']
@@ -44,7 +46,7 @@ def setup_logging(args):
     console = logging.StreamHandler()
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
     console.setFormatter(formatter)
-    logging.getLogger('backend').addHandler(console)
+    logger.addHandler(console)
 
 
 class Message(NamedTuple):
@@ -91,11 +93,11 @@ class Voting:
 
     def create_ssl_context(self, certpath, keyfile):
         if certpath is None:
-            logging.info('SSL disabled')
+            logger.info('SSL disabled')
             return None
         ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         ssl_context.load_cert_chain(certpath, keyfile=keyfile)
-        logging.info(f'SSL enabled using {certpath}')
+        logger.info(f'SSL enabled using {certpath}')
         return ssl_context
 
     def is_client_alive(self, c: Client):
@@ -155,15 +157,15 @@ class Voting:
         try:
             await ws.send(message)
         except ConnectionClosed:
-            logging.debug(f'tried to send {message} to closed client {ws}')
+            logger.debug(f'tried to send {message} to closed client {ws}')
 
     async def handle_message(self, client: Client, message):
-        logging.debug(f'{client}: {message}')
+        logger.debug(f'{client}: {message}')
         try:
             message = json.loads(message)
             code, data, userId = message['code'], message['data'], message['userId']
         except (json.JSONDecodeError, KeyError, TypeError):
-            logging.debug(f'{client} sent invalid message\n{message}')
+            logger.debug(f'{client} sent invalid message\n{message}')
             return
         client.last_seen = datetime.now()
         if client.userId is None:
@@ -174,7 +176,7 @@ class Voting:
                 if data < 0 or data > len(self.ballot['choices']):
                     raise ValueError
             except ValueError:
-                logging.debug(f'{client} sent invalid vote: {data}')
+                logger.debug(f'{client} sent invalid vote: {data}')
                 return
             self._votes[client.userId] = data
             await self.send_votes()
@@ -190,21 +192,21 @@ class Voting:
             return
         client = Client(path=path, ws=websocket, last_seen=datetime.now(), userId=None)
         self._clients.add(client)
-        logging.info(f'{websocket} connected')
+        logger.info(f'{websocket} connected')
         await self.send_votes()
         await self.send_to_one('setBallot', self.ballot, websocket)
         try:
             async for message in websocket:
                 await self.handle_message(client, message)
         except WebSocketException:
-            logging.debug(f'{client} exited disgracefully')
+            logger.debug(f'{client} exited disgracefully')
         # websocket closes
         self._clients.remove(client)
         await self.send_votes()
-        logging.info(f'{websocket} disconnected')
+        logger.info(f'{websocket} disconnected')
 
     async def start(self):
-        logging.info(f'running websocket server at {ADDRESS}:{self.port}')
+        logger.info(f'running websocket server at {ADDRESS}:{self.port}')
         async with websockets.serve(self.handle_ws, ADDRESS, self.port, ssl=self.ssl_context):
             asyncio.create_task(self.prune_clients())
             await asyncio.Future()  # run forever
