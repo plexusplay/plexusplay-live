@@ -30,8 +30,6 @@ const App = () => {
   const [timeLeft, setTimeLeft] = useState(0);
   const [timeLeftRatio, setTimeLeftRatio] = useState(0);
 
-  const [buttonsDisabled, setButtonsDisabled] = useState(false);
-
 
   const ws = useRef(null);
 
@@ -84,8 +82,8 @@ const App = () => {
       // on expiration stop the timer, and disable vote buttons
       if (millisRemaining <= 0) {
         setTimeLeft(0);
+        setTimeLeftRatio(0);
         clearInterval(interval);
-        setButtonsDisabled(true);
       } else {
         setTimeLeft(secondsRemaining);
         const ratio = millisRemaining / (ballot.duration*1000);
@@ -101,7 +99,6 @@ const App = () => {
     const data = message['data'];
     if (code === 'setBallot') {
       setBallot(data);
-      setButtonsDisabled(false);
       // When the ballot changes, reset client vote
       setChoice(-1);
     } else if (code === 'setVotes') {
@@ -151,6 +148,10 @@ const App = () => {
           }
   };
 
+  const buttonsDisabled = () => {
+    return (timeLeft <= 0);
+  }
+
   return (
     <View style={styles.container}>
       <View style={visualTimerStyle()}></View>
@@ -162,7 +163,7 @@ const App = () => {
       </View>
       {ballot.choices.map((curChoice, i, _) => {
         const isSelected = choice === i;
-        return <Pressable disabled={buttonsDisabled} style={[styles.choice, isSelected ? styles.selectedChoice : styles.unselectedChoice]} onPress={() => choose(i)} key={i}>
+        return <Pressable disabled={buttonsDisabled()} style={[styles.choice, isSelected ? styles.selectedChoice : styles.unselectedChoice]} onPress={() => choose(i)} key={i}>
         <Text style={[styles.big, styles.choiceText, isSelected ? styles.selectedText : styles.unselectedText]}>
             {curChoice} ({votes[i]})
         </Text>
