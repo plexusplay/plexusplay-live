@@ -1,6 +1,6 @@
 // Standard libraries
 import { useState, useRef, useEffect } from 'react';
-import { StyleSheet, View, Text, Pressable } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 
 // Third-party libraries
 import ReconnectingWebSocket from 'reconnecting-websocket';
@@ -156,18 +156,23 @@ const App = () => {
       <View style={visualTimerStyle()}></View>
       <View style={{ flex: 1, backgroundColor: backgroundColor()  }}>
         <View style={styles.header}>
-          <Text style={[styles.big, styles.timeLeft]}>{timeLeft}</Text>
           <Text style={[styles.big, styles.question]}>{ballot.question}</Text>
+          <View style={styles.buttonContainer}>
+            <View style={styles.triangle} />
+            {ballot.choices.map((curChoice, i, _) => {
+              const isSelected = choice === i;
+              return(
+                <TouchableOpacity style={styles.button} onPress={() => choose(i)} key={i}>
+                  <View style={[styles.buttonContent, styles.choice, isSelected ? styles.selectedChoice : styles.unselectedChoice]}>
+                    <Text style={[styles.big, styles.choiceText, isSelected ? styles.selectedText : styles.unselectedText]}>{curChoice} ({votes[i]})</Text>
+                  </View>
+                </TouchableOpacity>
+              )
+            })}
+          </View>
+          <Text style={[styles.verybig, styles.timeLeft]}>{isNaN(timeLeft) ? 0 : timeLeft}</Text>
         </View>
       </View>
-      {ballot.choices.map((curChoice, i, _) => {
-        const isSelected = choice === i;
-        return <Pressable disabled={buttonsDisabled} style={[styles.choice, isSelected ? styles.selectedChoice : styles.unselectedChoice]} onPress={() => choose(i)} key={i}>
-        <Text style={[styles.big, styles.choiceText, isSelected ? styles.selectedText : styles.unselectedText]}>
-            {curChoice} ({votes[i]})
-        </Text>
-      </Pressable>
-      })}
     </View>
   );
 };
@@ -178,10 +183,6 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'column',
     userSelect: 'none',
-  },
-  choice: {
-    flex: 2,
-    borderWidth: 1,
   },
   unselectedChoice: {
     backgroundColor: 'grey',
@@ -195,8 +196,14 @@ const styles = StyleSheet.create({
     marginLeft: 'auto',
     marginRight: 'auto',
   },
+  verybig: {
+    fontSize: '3.2rem',
+    fontFamily: 'LemonMilk',
+    marginLeft: 'auto',
+    marginRight: 'auto',
+  },
   question: {
-    marginTop: 'auto',
+    marginTop: 50,
   },
   choiceText: {
     marginTop: 'auto',
@@ -207,6 +214,24 @@ const styles = StyleSheet.create({
   },
   unselectedText: {
     fontWeight: 'normal',
+  },
+  buttonContainer: {
+    marginTop: 50,
+  },
+  button: {
+    borderRadius: 5,
+    overflow: 'hidden',
+    width: 200,
+    height: 50,
+    backgroundColor: 'white',
+    marginBottom: 50,
+    marginLeft: 'auto',
+    marginRight: 'auto',
+  },
+  buttonContent: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });
 
