@@ -1,12 +1,13 @@
 // Standard libraries
 import { useState, useRef, useEffect } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
+import { StyleSheet, View, TouchableOpacity } from 'react-native';
 
 // Third-party libraries
 import ReconnectingWebSocket from 'reconnecting-websocket';
 import { uniqueNamesGenerator, adjectives, colors, animals } from 'unique-names-generator';
 import { useFonts } from 'expo-font';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Svg, Path, Text } from 'react-native-svg';
 
 
 // const WS_BACKEND = "ws://rumpus:8080";
@@ -163,10 +164,13 @@ const App = () => {
             {ballot.choices.map((curChoice, i, _) => {
               const isSelected = choice === i;
               return(
-                <TouchableOpacity disabled={buttonsDisabled()} style={styles.button} onPress={() => choose(i)} key={i}>
-                  <View style={[styles.buttonContent, styles.choice, isSelected ? styles.selectedChoice : styles.unselectedChoice]}>
-                    <Text style={[styles.big, styles.choiceText, isSelected ? styles.selectedText : styles.unselectedText]}>{curChoice} ({votes[i]})</Text>
-                  </View>
+                <TouchableOpacity disabled={buttonsDisabled()} onPress={() => choose(i)}>
+                  <Svg width='340' height='100'>
+                    <Path d='M 20,0 L 320,0 L 340,30 L 320,60 L 20,60 L 0,30 Z' fill={isSelected ? 'lightblue' : 'grey'}/>
+                    <Text x="170" y="30" textAnchor="middle" alignmentBaseline="middle" style={[styles.big, styles.choiceText]}>
+                      {curChoice} ({votes[i]})
+                    </Text>
+                  </Svg>
                 </TouchableOpacity>
               )
             })}
@@ -205,6 +209,10 @@ const styles = StyleSheet.create({
   },
   question: {
     marginTop: 50,
+    borderColor: 'black',
+    padding: 80,
+    backgroundColor: 'black',
+    color: 'white',
   },
   choiceText: {
     marginTop: 'auto',
@@ -218,6 +226,8 @@ const styles = StyleSheet.create({
   },
   buttonContainer: {
     marginTop: 50,
+    marginLeft: 'auto',
+    marginRight: 'auto',
   },
   button: {
     borderRadius: 5,
