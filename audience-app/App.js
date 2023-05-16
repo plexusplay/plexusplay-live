@@ -208,9 +208,11 @@ const styles = StyleSheet.create({
     marginRight: 'auto',
   },
   question: {
-    marginTop: 50,
+    marginTop: 0,
     borderColor: 'black',
-    padding: 80,
+    paddingVertical: '1rem',
+    width: '100%',
+    textAlign: 'center',
     backgroundColor: 'black',
     color: 'white',
   },
