@@ -17,7 +17,7 @@ const WS_BACKEND = "wss://voting-socket.rumpus.club";
 const App = () => {
   const [ballot, setBallot] = useState({
     choices: ["Choice 1", "Choice 2", "Choice 3", "Choice 4"],
-    question: "Question",
+    question: "Loading...",
     expires: undefined,
     duration: 0,
   });
