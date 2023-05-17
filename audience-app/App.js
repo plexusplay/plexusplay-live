@@ -130,7 +130,7 @@ const App = () => {
   }
 
   const visualTimerHeight = () => {
-    if (timeLeft === 0) return '0%';
+    if (timeLeftRatio <= 0) return '0%';
     const percent = (timeLeftRatio * 100).toFixed(2);
     return '' + percent + '%';
   }
