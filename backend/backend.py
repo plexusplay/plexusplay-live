@@ -172,6 +172,8 @@ class Voting:
         if client.userId is None:
             client.userId = userId
         if code == 'vote':
+            if datetime.now() > datetime.fromtimestamp(self.ballot['expires']):
+                return
             try:
                 data = int(data)
                 if data < 0 or data > len(self.ballot['choices']):
