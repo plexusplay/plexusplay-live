@@ -124,7 +124,7 @@ const App = () => {
   }
 
   const backgroundColor = () => {
-    if (timeLeft <= 10) return 'red'
+    if (timeLeft <= 10) return 'darkred'
     if (timeLeft <= 30 && timeLeft > 10) return 'yellow'
     return 'green'
   }
@@ -166,8 +166,8 @@ const App = () => {
               return(
                 <TouchableOpacity disabled={buttonsDisabled()} onPress={() => choose(i)}>
                   <Svg width='340' height='100'>
-                    <Path d='M 20,0 L 320,0 L 340,30 L 320,60 L 20,60 L 0,30 Z' fill={isSelected ? 'lightblue' : 'grey'}/>
-                    <Text x="170" y="30" textAnchor="middle" alignmentBaseline="middle" style={[styles.big, styles.choiceText]}>
+                    <Path d='M 20,0 L 320,0 L 340,30 L 320,60 L 20,60 L 0,30 Z' fill={isSelected ? 'green' : 'black'}/>
+                    <Text x="170" y="30" textAnchor="middle" alignmentBaseline="middle" fill='white' style={[styles.big, styles.choiceText]}>
                       {curChoice} ({votes[i]})
                     </Text>
                   </Svg>
@@ -188,12 +188,6 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'column',
     userSelect: 'none',
-  },
-  unselectedChoice: {
-    backgroundColor: 'grey',
-  },
-  selectedChoice: {
-    backgroundColor: 'lightblue',
   },
   big: {
     fontSize: '1.2rem',
@@ -219,6 +213,7 @@ const styles = StyleSheet.create({
   choiceText: {
     marginTop: 'auto',
     marginBottom: 'auto',
+    color: 'white'
   },
   selectedText: {
     fontWeight: 'bold',
