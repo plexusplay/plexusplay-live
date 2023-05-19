@@ -123,12 +123,6 @@ const App = () => {
     sendMessage('vote', chosen);
   }
 
-  const backgroundColor = () => {
-    if (timeLeft <= 10) return 'darkred'
-    if (timeLeft <= 30 && timeLeft > 10) return 'yellow'
-    return 'green'
-  }
-
   const visualTimerHeight = () => {
     if (timeLeftRatio <= 0) return '0%';
     const percent = (timeLeftRatio * 100).toFixed(2);
@@ -138,11 +132,10 @@ const App = () => {
   const visualTimerStyle = () => {
     return {
             position: 'absolute',
-            backgroundColor: 'orange',
+            backgroundColor: '#590100',
             width: '100%',
             height: visualTimerHeight(),
-            zIndex: 1,
-            opacity: '50%',
+            zIndex: -1,
             pointerEvents: 'none',
             bottom: 0,
             left: 0,
@@ -155,8 +148,8 @@ const App = () => {
 
   return (
     <View style={styles.container}>
-      <View style={visualTimerStyle()}></View>
-      <View style={{ flex: 1, backgroundColor: backgroundColor()  }}>
+      <View style={{ flex: 1, backgroundColor: 'gray' }}>
+        <View style={visualTimerStyle()}></View>
         <View style={styles.header}>
           <Text style={[styles.big, styles.question]}>{ballot.question}</Text>
           <View style={styles.buttonContainer}>
@@ -167,8 +160,11 @@ const App = () => {
                 <TouchableOpacity disabled={buttonsDisabled()} onPress={() => choose(i)}>
                   <Svg width='340' height='100'>
                     <Path d='M 20,0 L 320,0 L 340,30 L 320,60 L 20,60 L 0,30 Z' fill={isSelected ? 'green' : 'black'}/>
-                    <Text x="170" y="30" textAnchor="middle" alignmentBaseline="middle" fill='white' style={[styles.big, styles.choiceText]}>
-                      {curChoice} ({votes[i]})
+                    <Text x="25" y="30" textAnchor="left" alignmentBaseline="middle" fill='white' style={[styles.big, styles.choiceText]}>
+                      {curChoice}
+                    </Text>
+                    <Text x="290" y="30" textAnchor="right" alignmentBaseline="middle" fill='white' style={[styles.big, styles.choiceText]}>
+                      ({votes[i]})
                     </Text>
                   </Svg>
                 </TouchableOpacity>
@@ -205,7 +201,8 @@ const styles = StyleSheet.create({
     marginTop: 0,
     borderColor: 'black',
     paddingVertical: '1rem',
-    width: '100%',
+    borderRadius: '1rem',
+    width: '66%',
     textAlign: 'center',
     backgroundColor: 'black',
     color: 'white',
@@ -240,6 +237,11 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  timeLeft: {
+    textShadowColor: 'white',
+    textShadowRadius: '1rem',
+
   },
 });
 
