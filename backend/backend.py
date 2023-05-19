@@ -19,6 +19,7 @@ import os
 import ssl
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from pprint import pformat
 from typing import NamedTuple, Optional
 
 # Third-party libraries
@@ -108,6 +109,12 @@ class Voting:
         else:
             return idle_time < ANONYMOUS_CLIENT_TIMEOUT
 
+    def collate_votes(self) -> dict:
+        expired = datetime.fromtimestamp(self.ballot['expires']).isoformat()
+        votes = {choice: self.votes[i] for i, choice in enumerate(self.ballot['choices'])}
+        question = self.ballot['question']
+        return {'question': question, 'expired': expired, 'votes': votes}
+
     async def prune_clients(self):
         while True:
             live_clients = {c for c in self._clients if self.is_client_alive(c) or c.path == '/admin'}
@@ -158,7 +165,7 @@ class Voting:
         try:
             await ws.send(message)
         except ConnectionClosed:
-            logger.warn(f'tried to send {message} to closed client {ws}')
+            logger.debug(f'tried to send {message} to closed client {ws}')
 
     async def handle_message(self, client: Client, message):
         logger.debug(f'{client}: {message}')
@@ -166,7 +173,7 @@ class Voting:
             message = json.loads(message)
             code, data, userId = message['code'], message['data'], message['userId']
         except (json.JSONDecodeError, KeyError, TypeError):
-            logger.warn(f'{client} sent invalid message\n{message}')
+            logger.debug(f'{client} sent invalid message\n{message}')
             return
         client.last_seen = datetime.now()
         if client.userId is None:
@@ -179,11 +186,14 @@ class Voting:
                 if data < 0 or data > len(self.ballot['choices']):
                     raise ValueError
             except ValueError:
-                logger.warn(f'{client} sent invalid vote: {data}')
+                logger.debug(f'{client} sent invalid vote: {data}')
                 return
             self._votes[client.userId] = data
             await self.send_votes()
         elif code == 'setBallot':
+            if self.ballot['expires'] is not None:
+                logger.info('Results of ballot:')
+                logger.info(pformat(self.collate_votes()))
             self.ballot = data
             self.ballot['duration'] = (datetime.fromtimestamp(self.ballot['expires']) - datetime.now()).seconds
             self._votes.clear()
@@ -196,7 +206,7 @@ class Voting:
             return
         client = Client(path=path, ws=websocket, last_seen=datetime.now(), userId=None)
         self._clients.add(client)
-        logger.info(f'{websocket} connected')
+        logger.debug(f'{websocket} connected')
         await self.send_votes()
         await self.send_to_one('setBallot', self.ballot, websocket)
         try:
@@ -207,7 +217,7 @@ class Voting:
         # websocket closes
         self._clients.remove(client)
         await self.send_votes()
-        logger.info(f'{websocket} disconnected')
+        logger.debug(f'{websocket} disconnected')
 
     async def start(self):
         logger.info(f'running websocket server at {ADDRESS}:{self.port}')
