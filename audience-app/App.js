@@ -25,6 +25,7 @@ const App = () => {
   const [votes, setVotes] = useState([]);
 
   const [choice, setChoice] = useState(-1);
+  const [winner, setWinner] = useState(-1);
 
   const [userId, setUserId] = useState("userId");
 
@@ -82,6 +83,7 @@ const App = () => {
       const secondsRemaining = Math.floor(millisRemaining / 1000);
       // on expiration stop the timer, and disable vote buttons
       if (millisRemaining <= 0) {
+        getWinner();
         setTimeLeft(0);
         setTimeLeftRatio(0);
         clearInterval(interval);
@@ -92,7 +94,7 @@ const App = () => {
       }
     }, 10);
     return () => clearInterval(interval);
-  }, [ballot.expires]);
+  }, [ballot.expires, votes]);
 
   const receiveMessage = (msg_event) => {
     const message = JSON.parse(msg_event.data);
@@ -102,6 +104,7 @@ const App = () => {
       setBallot(data);
       // When the ballot changes, reset client vote
       setChoice(-1);
+      setWinner(-1);
     } else if (code === 'setVotes') {
       setVotes(data);
     }
@@ -146,6 +149,17 @@ const App = () => {
     return (timeLeft <= 0);
   }
 
+  const fillStyle = (i) => {
+    if (i === winner) return 'purple';
+    if (i === choice) return 'green';
+    return 'black';
+  }
+
+  const getWinner = () => {
+    if (votes.every((v) => v === 0)) return -1;
+    setWinner(votes.indexOf(Math.max(...votes)));
+  }
+
   return (
     <View style={styles.container}>
       <View style={{ flex: 1, backgroundColor: 'gray' }}>
@@ -155,11 +169,10 @@ const App = () => {
           <View style={styles.buttonContainer}>
             <View style={styles.triangle} />
             {ballot.choices.map((curChoice, i, _) => {
-              const isSelected = choice === i;
               return(
                 <TouchableOpacity disabled={buttonsDisabled()} onPress={() => choose(i)}>
                   <Svg width='340' height='100'>
-                    <Path d='M 20,0 L 320,0 L 340,30 L 320,60 L 20,60 L 0,30 Z' fill={isSelected ? 'green' : 'black'}/>
+                    <Path d='M 20,0 L 320,0 L 340,30 L 320,60 L 20,60 L 0,30 Z' fill={fillStyle(i)}/>
                     <Text x="25" y="30" textAnchor="left" alignmentBaseline="middle" fill='white' style={[styles.big, styles.choiceText]}>
                       {curChoice}
                     </Text>
@@ -241,7 +254,6 @@ const styles = StyleSheet.create({
   timeLeft: {
     textShadowColor: 'white',
     textShadowRadius: '1rem',
-
   },
 });
 
