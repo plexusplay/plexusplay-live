@@ -11,7 +11,7 @@ import { Svg, Path, Text } from 'react-native-svg';
 
 
 // const WS_BACKEND = "ws://rumpus:8080";
-const WS_BACKEND = "wss://voting-socket-big.rumpus.club";
+const WS_BACKEND = "wss://voting-socket.rumpus.club";
 // const WS_BACKEND = "ws://localhost:8080";
 
 const App = () => {
@@ -155,9 +155,23 @@ const App = () => {
     return 'black';
   }
 
+  function findMaxWithHigherIndex(numbers) {
+    let max = -Infinity;
+    let maxIndex = -1;
+    for (let i = 0; i < numbers.length; i++) {
+      if (numbers[i] > max) {
+        max = numbers[i];
+        maxIndex = i;
+      } else if (numbers[i] === max && i > maxIndex) {
+        maxIndex = i;
+      }
+    }
+    return maxIndex;
+  }
+
   const getWinner = () => {
     if (votes.every((v) => v === 0)) return -1;
-    setWinner(votes.indexOf(Math.max(...votes)));
+    setWinner(findMaxWithHigherIndex(votes));
   }
 
   return (
