@@ -11,7 +11,7 @@ import { Svg, Path, Text } from 'react-native-svg';
 
 
 // const WS_BACKEND = "ws://rumpus:8080";
-const WS_BACKEND = "wss://voting-socket.rumpus.club";
+const WS_BACKEND = "wss://voting-socket-big.rumpus.club";
 // const WS_BACKEND = "ws://localhost:8080";
 
 const App = () => {
