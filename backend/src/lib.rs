@@ -15,7 +15,8 @@ pub enum ClientMessage {
     ClientVote {
         #[serde(rename = "userId")]
         user_id: String,
-        data: usize,
+        #[serde(rename = "data")]
+        vote: usize,
     },
 }
 

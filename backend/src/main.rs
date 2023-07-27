@@ -6,18 +6,19 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use backend::ClientMessage;
+use backend::{ClientMessage, ServerMessage};
+
 use log::{debug, error, log_enabled, info, Level};
 
 use futures_channel::mpsc::{unbounded, UnboundedSender};
-use futures_util::{future, pin_mut, stream::TryStreamExt, StreamExt};
+use futures_util::{future, stream::TryStreamExt, StreamExt};
 
-use tokio::{net::{TcpListener, TcpStream}, spawn};
+use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::tungstenite::protocol::Message;
 
 type Tx = UnboundedSender<Message>;
 type PeerMap = Arc<Mutex<HashMap<SocketAddr, Tx>>>;
-type Votes = Arc<Mutex<Vec<i32>>>;
+type Votes = Arc<Mutex<HashMap<String, usize>>>;
 
 const VOTE_SIZE: usize = 4;
 
@@ -30,22 +31,18 @@ async fn handle_connection(peer_map: PeerMap, raw_stream: TcpStream, addr: Socke
     info!("WebSocket connection established: {}", addr);
 
     // Insert the write part of this peer to the peer map.
-    let (tx, rx) = unbounded();
+    let (tx, _rx) = unbounded();
     peer_map.lock().unwrap().insert(addr, tx);
 
-    let (outgoing, incoming) = ws_stream.split();
+    let (_outgoing, incoming) = ws_stream.split();
 
     let process_incoming = incoming.try_for_each(|ws_msg| {
         debug!("Received a message from {}: {}", addr, ws_msg.to_text().unwrap());
-        // let peers = peer_map.lock().unwrap();
 
         // // We want to broadcast the message to everyone except ourselves.
         // let broadcast_recipients =
         //     peers.iter().filter(|(peer_addr, _)| peer_addr != &&addr).map(|(_, ws_sink)| ws_sink);
 
-        // for recp in broadcast_recipients {
-        //     recp.unbounded_send(msg.clone()).unwrap();
-        // }
 
         let parsed = match ws_msg {
             Message::Text(str) => ClientMessage::parse(&str),
@@ -62,25 +59,38 @@ async fn handle_connection(peer_map: PeerMap, raw_stream: TcpStream, addr: Socke
 
         match msg {
             ClientMessage::ClientSetBallot { user_id, data } => todo!(),
-            ClientMessage::ClientVote { user_id, data } => {
-                if (data >= VOTE_SIZE) {
-                    debug!("vote index >= than VOTE_SIZE: {}", data);
+            ClientMessage::ClientVote { user_id, vote } => {
+                if vote >= VOTE_SIZE {
+                    debug!("user {} sent vote index >= than VOTE_SIZE: {}", user_id, vote);
                     return future::ok(());
                 }
-                votes.lock().unwrap()[data] += 1;
-                println!("{:?}", votes.lock().unwrap());
+                votes.lock().unwrap().insert(user_id, vote);
+                let peers = peer_map.lock().unwrap();
+                for recp in peers.iter().map(|(_, sink)| sink) {
+                    let msg = Message::Text(serde_json::to_string(&ServerMessage::ServerSetVotes { data: transform_votes(&votes)}).unwrap());
+                    debug!("Sending {:?} to {:?}", msg, recp);
+                    recp.unbounded_send(msg).unwrap();
+                }
             }
         }
-
 
         future::ok(())
     });
 
-    process_incoming.await;
+    let _ = process_incoming.await;
 
 
     info!("{} disconnected", &addr);
     peer_map.lock().unwrap().remove(&addr);
+}
+
+fn transform_votes(votes: &Votes) -> Vec<u32> {
+    let votes = votes.lock().unwrap();
+    let mut ret = vec![0; VOTE_SIZE];
+    for (_user_id, &vote) in votes.iter() {
+        ret[vote] += 1;
+    }
+    ret
 }
 
 #[tokio::main]
@@ -91,8 +101,7 @@ async fn main() -> Result<(), IoError> {
     let addr = env::args().nth(1).unwrap_or_else(|| "127.0.0.1:8080".to_string());
 
     let state = PeerMap::new(Mutex::new(HashMap::new()));
-    let votes = vec![0; VOTE_SIZE];
-    let votes = Arc::new(Mutex::new(votes));
+    let votes = Arc::new(Mutex::new(HashMap::<String, usize>::new()));
 
     // Create the event loop and TCP listener we'll accept connections on.
     let try_socket = TcpListener::bind(&addr).await;
