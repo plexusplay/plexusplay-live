@@ -7,14 +7,10 @@ use serde::{Deserialize, Serialize};
 pub enum ClientMessage {
     #[serde(rename = "setBallot")]
     ClientSetBallot {
-        #[serde(rename = "userId")]
-        user_id: String,
         data: ClientSetBallotData,
     },
     #[serde(rename = "vote")]
     ClientVote {
-        #[serde(rename = "userId")]
-        user_id: String,
         #[serde(rename = "data")]
         vote: usize,
     },
