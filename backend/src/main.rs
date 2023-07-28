@@ -69,7 +69,14 @@ async fn handle_connection(
 
 
         match msg {
-            ClientMessage::ClientSetBallot { data } => todo!(),
+            ClientMessage::ClientSetBallot { ballot_data } => {
+                    let mut ballot_guard = ballot.lock().unwrap();
+                    ballot_guard.choices = ballot_data.choices;
+                    ballot_guard.question = ballot_data.question;
+                    ballot_guard.duration = time::Duration::seconds(ballot_data.duration_seconds);
+                    ballot_guard.expires = time::OffsetDateTime::now_utc() + ballot_guard.duration;
+                    send_to_all(peer_map.clone(), serde_json::to_string(&*ballot_guard).unwrap());
+            },
             ClientMessage::ClientVote { vote } => {
                 if vote >= VOTE_SIZE {
                     debug!("user {} sent vote index >= than VOTE_SIZE: {}", addr, vote);

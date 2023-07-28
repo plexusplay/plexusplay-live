@@ -7,7 +7,8 @@ use serde::{Deserialize, Serialize};
 pub enum ClientMessage {
     #[serde(rename = "setBallot")]
     ClientSetBallot {
-        data: ClientSetBallotData,
+        #[serde(rename = "data")]
+        ballot_data: ClientSetBallotData,
     },
     #[serde(rename = "vote")]
     ClientVote {
@@ -20,7 +21,7 @@ pub enum ClientMessage {
 pub struct ClientSetBallotData {
     pub choices: Vec<String>,
     pub question: String,
-    pub duration: time::Duration,
+    pub duration_seconds: i64,
 }
 
 impl ClientMessage {
