@@ -6,7 +6,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use backend::{ClientMessage, ServerMessage, ServerSetBallotData};
+use backend::{ClientMessage, ServerSetBallotData};
 
 use log::{debug, info};
 
@@ -68,18 +68,15 @@ async fn handle_connection(
         };
 
         match msg {
-            ClientMessage::ClientSetBallot { ballot_data } => {
-                let mut ballot = ballot.lock().unwrap();
-                ballot.choices = ballot_data.choices;
-                ballot.question = ballot_data.question;
-                ballot.duration = ballot_data.duration;
-                ballot.expires = time::OffsetDateTime::now_utc() + ballot.duration;
-                send_to_all(
-                    peer_map.clone(),
-                    serde_json::to_string(&*ballot).expect("Failed to serialize ballot"),
-                );
+            ClientMessage::ClientSetBallot(ballot_data) => {
+                let mut ballot_guard = ballot.lock().unwrap();
+                ballot_guard.choices = ballot_data.choices;
+                ballot_guard.question = ballot_data.question;
+                ballot_guard.duration = ballot_data.duration;
+                ballot_guard.expires = time::OffsetDateTime::now_utc() + ballot_guard.duration;
+                send_ballot_to_all(peer_map.clone(), ballot.clone())
             }
-            ClientMessage::ClientVote { vote } => {
+            ClientMessage::ClientVote(vote) => {
                 if vote >= VOTE_SIZE {
                     debug!("user {} sent vote index >= than VOTE_SIZE: {}", addr, vote);
                     return future::ok(());
@@ -94,8 +91,8 @@ async fn handle_connection(
     let receive_from_others = rx.map(Ok).forward(outgoing);
 
     // Send ballot data to client
-    let msg = serde_json::to_string(&*ballot.lock().unwrap()).unwrap();
-    tx.unbounded_send(Message::Text(serde_json::to_string(&msg).unwrap()))
+    let msg = ballot.lock().unwrap().serialize();
+    tx.unbounded_send(Message::Text(msg))
         .expect("Failed to send ballot data");
     send_votes_to_all(peer_map.clone(), vote_map.clone());
 
@@ -107,10 +104,18 @@ async fn handle_connection(
     send_votes_to_all(peer_map.clone(), vote_map.clone());
 }
 
-fn send_votes_to_all(peer_map: PeerMap, vote_map: VoteMap) -> () {
-    let msg = ServerMessage::ServerSetVotes(transform_votes(vote_map.clone()));
-    let msg = serde_json::to_string(&msg).unwrap();
+fn send_ballot_to_all(peer_map: PeerMap, ballot: Ballot) -> () {
+    let msg = ballot.lock().unwrap().serialize();
     send_to_all(peer_map.clone(), msg);
+}
+
+fn send_votes_to_all(peer_map: PeerMap, vote_map: VoteMap) -> () {
+    let votes = collate_votes(vote_map);
+    let msg = serde_json::json!({
+        "code": "setVotes",
+        "data": votes,
+    }).to_string();
+    send_to_all(peer_map, msg);
 }
 
 fn send_to_all(peer_map: PeerMap, msg: String) -> () {
@@ -120,7 +125,7 @@ fn send_to_all(peer_map: PeerMap, msg: String) -> () {
     }
 }
 
-fn transform_votes(vote_map: VoteMap) -> Vec<u32> {
+fn collate_votes(vote_map: VoteMap) -> Vec<u32> {
     let vote_map = vote_map.lock().unwrap();
     let mut ret = vec![0; VOTE_SIZE];
     for (_addr, &vote_index) in vote_map.iter() {

@@ -5,18 +5,12 @@ use serde::ser::{SerializeStruct, Serializer};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(tag = "code")]
+#[serde(tag = "code", content = "data")]
 pub enum ClientMessage {
     #[serde(rename = "setBallot")]
-    ClientSetBallot {
-        #[serde(rename = "data")]
-        ballot_data: ClientSetBallotData,
-    },
+    ClientSetBallot(ClientSetBallotData),
     #[serde(rename = "vote")]
-    ClientVote {
-        #[serde(rename = "data")]
-        vote: usize,
-    },
+    ClientVote(usize),
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -43,21 +37,22 @@ impl ClientMessage {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(tag = "code", content = "data")]
-pub enum ServerMessage {
-    #[serde(rename = "setBallot")]
-    ServerSetBallot(ServerSetBallotData),
-    #[serde(rename = "setVotes")]
-    ServerSetVotes(Vec<u32>),
-}
-
 #[derive(Deserialize, Debug)]
 pub struct ServerSetBallotData {
     pub choices: Vec<String>,
     pub question: String,
     pub duration: time::Duration,
     pub expires: time::OffsetDateTime,
+}
+
+impl ServerSetBallotData {
+    pub fn serialize(self: &Self) -> String {
+        let ret = serde_json::json!({
+            "code": "setBallot",
+            "data": self,
+        });
+        return serde_json::to_string(&ret).unwrap();
+    }
 }
 
 impl Serialize for ServerSetBallotData {
