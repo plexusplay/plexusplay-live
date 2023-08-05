@@ -10,8 +10,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Svg, Path, Text } from 'react-native-svg';
 
 
-// const WS_BACKEND = "ws://rumpus:8080";
-const WS_BACKEND = "wss://voting-socket-big.rumpus.club";
+const WS_BACKEND = "ws://rumpus:8080";
+// const WS_BACKEND = "wss://voting-socket-big.rumpus.club";
 // const WS_BACKEND = "ws://localhost:8080";
 
 const App = () => {
@@ -27,7 +27,6 @@ const App = () => {
   const [choice, setChoice] = useState(-1);
   const [winner, setWinner] = useState(-1);
 
-  const [userId, setUserId] = useState("userId");
 
   const [timeLeft, setTimeLeft] = useState(0);
   const [timeLeftRatio, setTimeLeftRatio] = useState(0);
@@ -39,22 +38,6 @@ const App = () => {
     'LemonMilk': require('./assets/fonts/lemonmilk-regular.otf'),
   });
 
-  //  Set up unique name
-  useEffect(() => {
-    AsyncStorage.getItem('userId').then((maybeUserId) => {
-      if (maybeUserId !== null) {
-        setUserId(maybeUserId);
-      } else { // No userId exists
-        const uniqueUserId = uniqueNamesGenerator({
-          dictionaries: [adjectives, colors, animals],
-        });
-        AsyncStorage.setItem('userId', uniqueUserId).then(() => {
-          setUserId(uniqueUserId);
-        });
-      }
-    });
-  }, []);
-
   // Set up WebSocket
   useEffect(() => {
     const sock = new ReconnectingWebSocket(WS_BACKEND);
@@ -62,18 +45,6 @@ const App = () => {
     ws.current = sock;
     return () => sock.close();
   }, []);
-
-  // Set up heartbeat
-  useEffect(() => {
-    const heartbeatFunc = setInterval(() => {
-      sendMessage('heartbeat', null);
-    // every 5 seconds
-    }, 5000);
-    // clear this timer when the component is unmounted
-    return () => {
-      clearInterval(heartbeatFunc);
-    };
-  });
 
   // Set up timer
   useEffect(() => {
@@ -114,7 +85,6 @@ const App = () => {
     const message = JSON.stringify({
       code: code,
       data: data,
-      userId: userId,
     });
     if (ws.current !== null) {
       ws.current.send(message);
