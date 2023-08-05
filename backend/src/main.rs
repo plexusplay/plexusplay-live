@@ -74,6 +74,7 @@ async fn handle_connection(
                 ballot_guard.question = ballot_data.question;
                 ballot_guard.duration = ballot_data.duration;
                 ballot_guard.expires = time::OffsetDateTime::now_utc() + ballot_guard.duration;
+                drop(ballot_guard);
                 send_ballot_to_all(peer_map.clone(), ballot.clone())
             }
             ClientMessage::ClientVote(vote) => {
