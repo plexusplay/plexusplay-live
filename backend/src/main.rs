@@ -3,12 +3,12 @@ use std::{
     env,
     io::Error as IoError,
     net::SocketAddr,
-    sync::{Arc, Mutex, RwLock},
+    sync::{Arc, Mutex},
 };
 
 use backend::{ClientMessage, ServerMessage, ServerSetBallotData};
 
-use log::{debug, error, info, log_enabled, Level};
+use log::{debug, info};
 
 use futures_channel::mpsc::{unbounded, UnboundedSender};
 use futures_util::{future, stream::TryStreamExt, StreamExt};
@@ -67,16 +67,18 @@ async fn handle_connection(
             }
         };
 
-
         match msg {
             ClientMessage::ClientSetBallot { ballot_data } => {
-                    let mut ballot_guard = ballot.lock().unwrap();
-                    ballot_guard.choices = ballot_data.choices;
-                    ballot_guard.question = ballot_data.question;
-                    ballot_guard.duration = time::Duration::seconds(ballot_data.duration_seconds);
-                    ballot_guard.expires = time::OffsetDateTime::now_utc() + ballot_guard.duration;
-                    send_to_all(peer_map.clone(), serde_json::to_string(&*ballot_guard).unwrap());
-            },
+                let mut ballot = ballot.lock().unwrap();
+                ballot.choices = ballot_data.choices;
+                ballot.question = ballot_data.question;
+                ballot.duration = ballot_data.duration;
+                ballot.expires = time::OffsetDateTime::now_utc() + ballot.duration;
+                send_to_all(
+                    peer_map.clone(),
+                    serde_json::to_string(&*ballot).expect("Failed to serialize ballot"),
+                );
+            }
             ClientMessage::ClientVote { vote } => {
                 if vote >= VOTE_SIZE {
                     debug!("user {} sent vote index >= than VOTE_SIZE: {}", addr, vote);
@@ -93,7 +95,8 @@ async fn handle_connection(
 
     // Send ballot data to client
     let msg = serde_json::to_string(&*ballot.lock().unwrap()).unwrap();
-    tx.unbounded_send(Message::Text(serde_json::to_string(&msg).unwrap())).expect("Failed to send ballot data");
+    tx.unbounded_send(Message::Text(serde_json::to_string(&msg).unwrap()))
+        .expect("Failed to send ballot data");
 
     future::select(process_incoming, receive_from_others).await;
 
@@ -104,7 +107,10 @@ async fn handle_connection(
 }
 
 fn send_votes_to_all(peer_map: PeerMap, vote_map: VoteMap) -> () {
-    let msg = serde_json::to_string(&ServerMessage::ServerSetVotes {data: transform_votes(vote_map.clone())}).unwrap();
+    let msg = serde_json::to_string(&ServerMessage::ServerSetVotes {
+        data: transform_votes(vote_map.clone()),
+    })
+    .unwrap();
     send_to_all(peer_map.clone(), msg);
 }
 
@@ -118,11 +124,10 @@ fn send_to_all(peer_map: PeerMap, msg: String) -> () {
 fn transform_votes(vote_map: VoteMap) -> Vec<u32> {
     let vote_map = vote_map.lock().unwrap();
     let mut ret = vec![0; VOTE_SIZE];
-    for (_addr, &vote) in vote_map.iter() {
-        if vote >= VOTE_SIZE {
-            continue;
+    for (_addr, &vote_index) in vote_map.iter() {
+        if vote_index < VOTE_SIZE {
+            ret[vote_index] += 1;
         }
-        ret[vote] += 1;
     }
     ret
 }
@@ -151,7 +156,6 @@ async fn main() -> Result<(), IoError> {
     println!("Listening on: {}", addr);
 
     // Let's spawn the handling of each connection in a separate task.
-
 
     while let Ok((stream, addr)) = listener.accept().await {
         tokio::spawn(handle_connection(
