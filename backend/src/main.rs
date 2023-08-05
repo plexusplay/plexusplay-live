@@ -97,6 +97,7 @@ async fn handle_connection(
     let msg = serde_json::to_string(&*ballot.lock().unwrap()).unwrap();
     tx.unbounded_send(Message::Text(serde_json::to_string(&msg).unwrap()))
         .expect("Failed to send ballot data");
+    send_votes_to_all(peer_map.clone(), vote_map.clone());
 
     future::select(process_incoming, receive_from_others).await;
 
@@ -107,10 +108,8 @@ async fn handle_connection(
 }
 
 fn send_votes_to_all(peer_map: PeerMap, vote_map: VoteMap) -> () {
-    let msg = serde_json::to_string(&ServerMessage::ServerSetVotes {
-        data: transform_votes(vote_map.clone()),
-    })
-    .unwrap();
+    let msg = ServerMessage::ServerSetVotes(transform_votes(vote_map.clone()));
+    let msg = serde_json::to_string(&msg).unwrap();
     send_to_all(peer_map.clone(), msg);
 }
 
