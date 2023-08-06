@@ -3,6 +3,7 @@ use std::error::Error;
 use serde::de::Deserializer;
 use serde::ser::{SerializeStruct, Serializer};
 use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "code", content = "data")]
@@ -10,6 +11,7 @@ pub enum ClientMessage {
     #[serde(rename = "setBallot")]
     ClientSetBallot(ClientSetBallotData),
     #[serde(rename = "vote")]
+    #[serde(deserialize_with = "deserialize_vote")]
     ClientVote(usize),
 }
 
@@ -19,6 +21,24 @@ pub struct ClientSetBallotData {
     pub question: String,
     #[serde(deserialize_with = "deserialize_duration")]
     pub duration: time::Duration,
+}
+
+fn deserialize_vote<'de, D>(deserializer: D) -> Result<usize, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = JsonValue::deserialize(deserializer)?;
+    match value {
+        JsonValue::Number(num) => {
+            if let Some(vote) = num.as_u64() {
+                Ok(vote as usize)
+            } else {
+                Err(serde::de::Error::custom("Vote value is out of range for usize"))
+            }
+        }
+        JsonValue::String(s) => s.parse().map_err(serde::de::Error::custom),
+        _ => Err(serde::de::Error::custom("Invalid vote type")),
+    }
 }
 
 fn deserialize_duration<'de, D>(deserializer: D) -> Result<time::Duration, D::Error>
