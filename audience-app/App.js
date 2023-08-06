@@ -46,6 +46,19 @@ const App = () => {
     return () => sock.close();
   }, []);
 
+  // Set up local storage of current choice
+  useEffect(() => {
+    AsyncStorage.getItem('choice').then((maybeChoice) => {
+      if (maybeChoice !== null) {
+        // AsyncStorage is all strings
+        const choice = parseInt(maybeChoice);
+        if (choice !== -1) {
+          voteFor(choice);
+        }
+      }
+    });
+  }, []);
+
   // Set up timer
   useEffect(() => {
     const interval = setInterval(() => {
@@ -92,8 +105,14 @@ const App = () => {
   }
 
   const choose = (chosen) => {
-    setChoice(chosen);
-    sendMessage('vote', chosen);
+    AsyncStorage.setItem('choice', chosen).then(() => {
+      voteFor(chosen);
+    });
+  }
+
+  const voteFor = (vote) => {
+    setChoice(vote);
+    sendMessage('vote', vote);
   }
 
   const visualTimerHeight = () => {

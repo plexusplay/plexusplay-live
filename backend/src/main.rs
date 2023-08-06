@@ -75,7 +75,9 @@ async fn handle_connection(
                 ballot_guard.duration = ballot_data.duration;
                 ballot_guard.expires = time::OffsetDateTime::now_utc() + ballot_guard.duration;
                 drop(ballot_guard);
-                send_ballot_to_all(peer_map.clone(), ballot.clone())
+                send_ballot_to_all(peer_map.clone(), ballot.clone());
+                reset_votes(vote_map.clone());
+                send_votes_to_all(peer_map.clone(), vote_map.clone());
             }
             ClientMessage::ClientVote(vote) => {
                 if vote >= VOTE_SIZE {
@@ -124,6 +126,11 @@ fn send_to_all(peer_map: PeerMap, msg: String) -> () {
     for recp in peer_map.lock().unwrap().iter().map(|(_, sink)| sink) {
         recp.unbounded_send(msg.clone()).unwrap();
     }
+}
+
+fn reset_votes(vote_map: VoteMap) -> () {
+    let mut vote_map = vote_map.lock().unwrap();
+    vote_map.clear();
 }
 
 fn collate_votes(vote_map: VoteMap) -> Vec<u32> {
