@@ -124,7 +124,7 @@ fn send_votes_to_all(peer_map: PeerMap, vote_map: VoteMap) -> () {
 fn send_to_all(peer_map: PeerMap, msg: String) -> () {
     let msg = Message::Text(msg);
     for recp in peer_map.lock().unwrap().iter().map(|(_, sink)| sink) {
-        recp.unbounded_send(msg.clone()).unwrap();
+        recp.unbounded_send(msg.clone()).unwrap_or_default();
     }
 }
 
