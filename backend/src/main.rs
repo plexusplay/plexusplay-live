@@ -3,7 +3,7 @@ use std::{
     env,
     io::Error as IoError,
     net::SocketAddr,
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, RwLock},
 };
 
 use backend::{ClientMessage, ServerSetBallotData};
@@ -16,10 +16,12 @@ use futures_util::{future, stream::TryStreamExt, StreamExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio_tungstenite::tungstenite::protocol::Message;
 
+use dashmap::DashMap;
+
 type Tx = UnboundedSender<Message>;
-type PeerMap = Arc<Mutex<HashMap<SocketAddr, Tx>>>;
-type VoteMap = Arc<Mutex<HashMap<SocketAddr, usize>>>;
-type Ballot = Arc<Mutex<ServerSetBallotData>>;
+type PeerMap = Arc<DashMap<SocketAddr, Tx>>;
+type VoteMap = Arc<DashMap<SocketAddr, usize>>;
+type Ballot = Arc<RwLock<ServerSetBallotData>>;
 
 const VOTE_SIZE: usize = 4;
 
@@ -39,7 +41,7 @@ async fn handle_connection(
 
     // Insert the write part of this peer to the peer map.
     let (tx, rx) = unbounded();
-    peer_map.lock().unwrap().insert(addr, tx.clone());
+    peer_map.insert(addr, tx.clone());
 
     let (outgoing, incoming) = ws_stream.split();
 
@@ -69,14 +71,14 @@ async fn handle_connection(
 
         match msg {
             ClientMessage::ClientSetBallot(ballot_data) => {
-                let mut ballot_guard = ballot.lock().unwrap();
+                let mut ballot_guard = ballot.write().unwrap();
                 ballot_guard.choices = ballot_data.choices;
                 ballot_guard.question = ballot_data.question;
                 ballot_guard.duration = ballot_data.duration;
                 ballot_guard.expires = time::OffsetDateTime::now_utc() + ballot_guard.duration;
                 drop(ballot_guard);
                 send_ballot_to_all(peer_map.clone(), ballot.clone());
-                reset_votes(vote_map.clone());
+                vote_map.clear();
                 send_votes_to_all(peer_map.clone(), vote_map.clone());
             }
             ClientMessage::ClientVote(vote) => {
@@ -84,7 +86,7 @@ async fn handle_connection(
                     debug!("user {} sent vote index >= than VOTE_SIZE: {}", addr, vote);
                     return future::ok(());
                 }
-                vote_map.lock().unwrap().insert(addr, vote);
+                vote_map.insert(addr, vote);
                 send_votes_to_all(peer_map.clone(), vote_map.clone());
             }
         }
@@ -94,7 +96,7 @@ async fn handle_connection(
     let receive_from_others = rx.map(Ok).forward(outgoing);
 
     // Send ballot data to client
-    let msg = ballot.lock().unwrap().serialize();
+    let msg = ballot.read().unwrap().serialize();
     tx.unbounded_send(Message::Text(msg))
         .expect("Failed to send ballot data");
     send_votes_to_all(peer_map.clone(), vote_map.clone());
@@ -102,13 +104,13 @@ async fn handle_connection(
     future::select(process_incoming, receive_from_others).await;
 
     info!("{} disconnected", &addr);
-    peer_map.lock().unwrap().remove(&addr);
-    vote_map.lock().unwrap().remove(&addr);
+    peer_map.remove(&addr);
+    vote_map.remove(&addr);
     send_votes_to_all(peer_map.clone(), vote_map.clone());
 }
 
 fn send_ballot_to_all(peer_map: PeerMap, ballot: Ballot) -> () {
-    let msg = ballot.lock().unwrap().serialize();
+    let msg = ballot.read().unwrap().serialize();
     send_to_all(peer_map.clone(), msg);
 }
 
@@ -123,24 +125,19 @@ fn send_votes_to_all(peer_map: PeerMap, vote_map: VoteMap) -> () {
 
 fn send_to_all(peer_map: PeerMap, msg: String) -> () {
     let msg = Message::Text(msg);
-    for recp in peer_map.lock().unwrap().iter().map(|(_, sink)| sink) {
+    peer_map.iter().for_each(|recp| {
         recp.unbounded_send(msg.clone()).unwrap_or_default();
-    }
-}
-
-fn reset_votes(vote_map: VoteMap) -> () {
-    let mut vote_map = vote_map.lock().unwrap();
-    vote_map.clear();
+    });
 }
 
 fn collate_votes(vote_map: VoteMap) -> Vec<u32> {
-    let vote_map = vote_map.lock().unwrap();
     let mut ret = vec![0; VOTE_SIZE];
-    for (_addr, &vote_index) in vote_map.iter() {
+    vote_map.iter().for_each(|vote_index| {
+        let vote_index = *vote_index;
         if vote_index < VOTE_SIZE {
             ret[vote_index] += 1;
         }
-    }
+    });
     ret
 }
 
@@ -152,15 +149,15 @@ async fn main() -> Result<(), IoError> {
         .nth(1)
         .unwrap_or_else(|| "127.0.0.1:8080".to_string());
 
-    let peer_map = PeerMap::new(Mutex::new(HashMap::new()));
-    let vote_map = VoteMap::new(Mutex::new(HashMap::new()));
+    let peer_map = PeerMap::new(DashMap::new());
+    let vote_map = VoteMap::new(DashMap::new());
     let ballot_data = ServerSetBallotData {
         choices: vec![String::from("Init choice"); VOTE_SIZE],
         question: String::from("Question from server"),
         duration: time::Duration::new(0, 0),
         expires: time::OffsetDateTime::now_utc(),
     };
-    let ballot: Ballot = Ballot::new(Mutex::new(ballot_data));
+    let ballot: Ballot = Ballot::new(RwLock::new(ballot_data));
 
     // Create the event loop and TCP listener we'll accept connections on.
     let try_socket = TcpListener::bind(&addr).await;
