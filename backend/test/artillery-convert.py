@@ -8,9 +8,13 @@ with a CSV extension.
 import csv
 import json
 from collections import namedtuple
-from sys import argv
+from sys import argv, exit
 
-basename = argv[1]
+try:
+    basename = argv[1]
+except IndexError:
+    print(__doc__)
+    exit(1)
 
 Row = namedtuple('Row', ['users', 'median', 'p95', 'p99'])
 
