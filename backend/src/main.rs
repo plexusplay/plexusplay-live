@@ -82,7 +82,7 @@ async fn user_connected(ws: WebSocket, state: State) {
     // Use a counter to assign a new unique ID for this user.
     let my_id = NEXT_USER_ID.fetch_add(1, Ordering::Relaxed);
 
-    eprintln!("new user: {}", my_id);
+    debug!("new user: {}", my_id);
 
     // Split the socket into a sender and receive of messages.
     let (mut user_ws_tx, mut user_ws_rx) = ws.split();
@@ -97,7 +97,7 @@ async fn user_connected(ws: WebSocket, state: State) {
             user_ws_tx
                 .send(message)
                 .unwrap_or_else(|e| {
-                    eprintln!("websocket send error: {}", e);
+                    debug!("websocket send error: {}", e);
                 })
                 .await;
         }
@@ -118,7 +118,7 @@ async fn user_connected(ws: WebSocket, state: State) {
         let msg = match result {
             Ok(msg) => msg,
             Err(e) => {
-                eprintln!("websocket error(uid={}): {}", my_id, e);
+                debug!("websocket error(uid={}): {}", my_id, e);
                 break;
             }
         };
@@ -197,7 +197,7 @@ async fn collate_votes(state: State) -> Vec<u32> {
 }
 
 async fn user_disconnected(my_id: usize, users: &Users) {
-    eprintln!("good bye user: {}", my_id);
+    debug!("good bye user: {}", my_id);
 
     // Stream closed up, so remove from the user list
     users.write().await.remove(&my_id);
