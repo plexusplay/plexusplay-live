@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::env;
 use std::net::SocketAddr;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
@@ -66,8 +67,15 @@ async fn main() {
             ws.on_upgrade(move |socket| user_connected(socket, users))
         });
 
+    let addr = env::args()
+    .nth(1)
+    .unwrap_or_else(|| "127.0.0.1:8080".to_string());
 
-    warp::serve(ws_endpoint).run(([127, 0, 0, 1], 3030)).await;
+    let addr: SocketAddr = addr
+        .parse()
+        .expect("Unable to parse socket address");
+
+    warp::serve(ws_endpoint).run(addr).await;
 }
 
 async fn user_connected(ws: WebSocket, state: State) {
