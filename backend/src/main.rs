@@ -1,179 +1,196 @@
-use std::{
-    env,
-    io::Error as IoError,
-    net::SocketAddr,
-    sync::{Arc, RwLock},
+use std::collections::HashMap;
+use std::net::SocketAddr;
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc,
 };
 
-use backend::{ClientMessage, ServerSetBallotData};
+use futures_util::{SinkExt, StreamExt, TryFutureExt};
+use log::{debug, error, log_enabled, info, Level};
+use tokio::sync::{mpsc, RwLock};
+use tokio_stream::wrappers::UnboundedReceiverStream;
+use warp::hyper::Client;
+use warp::ws::{Message, WebSocket};
+use warp::Filter;
 
-use log::{debug, info};
+use backend::{ServerSetBallotData, ClientMessage};
 
-use futures_channel::mpsc::{unbounded, UnboundedSender};
-use futures_util::{future, stream::TryStreamExt, StreamExt};
+// The number of questions on the ballot.
+const BALLOT_SIZE: usize = 4;
 
-use tokio::net::{TcpListener, TcpStream};
-use tokio_tungstenite::tungstenite::protocol::Message;
+/// Our global unique user id counter.
+static NEXT_USER_ID: AtomicUsize = AtomicUsize::new(1);
 
-use dashmap::DashMap;
+/// Our state of currently connected users.
+///
+/// - Key is their id
+/// - Value is a sender of `warp::ws::Message`
 
-type Tx = UnboundedSender<Message>;
-type PeerMap = Arc<DashMap<SocketAddr, Tx>>;
-type VoteMap = Arc<DashMap<SocketAddr, usize>>;
-type Ballot = Arc<RwLock<ServerSetBallotData>>;
 
-const VOTE_SIZE: usize = 4;
+type Users = RwLock<HashMap<usize, mpsc::UnboundedSender<Message>>>;
+type VoteMap = RwLock<HashMap<usize, usize>>;
+type Ballot = RwLock<ServerSetBallotData>;
 
-async fn handle_connection(
-    peer_map: PeerMap,
-    vote_map: VoteMap,
+type State = Arc<StateData>;
+struct StateData{
+    users: Users,
+    votes: VoteMap,
     ballot: Ballot,
-    raw_stream: TcpStream,
-    addr: SocketAddr,
-) {
-    info!("Incoming TCP connection from: {}", addr);
+}
 
-    let ws_stream = tokio_tungstenite::accept_async(raw_stream)
-        .await
-        .expect("Error during the websocket handshake occurred");
-    info!("WebSocket connection established: {}", addr);
+#[tokio::main]
+async fn main() {
+    env_logger::init();
 
-    // Insert the write part of this peer to the peer map.
-    let (tx, rx) = unbounded();
-    peer_map.insert(addr, tx.clone());
+    // Keep track of all connected users, key is usize, value
+    // is a websocket sender.
+    let ballot_data = ServerSetBallotData {
+        choices: vec![String::from("Init choice"); BALLOT_SIZE],
+        question: String::from("Question from server"),
+        duration: time::Duration::new(0, 0),
+        expires: time::OffsetDateTime::now_utc(),
+    };
+    let state = State::new(StateData {
+        users: Users::default(),
+        votes: VoteMap::default(),
+        ballot: RwLock::new(ballot_data),
+    });    // Turn our "state" into a new Filter...
+    let users = warp::any().map(move || state.clone());
 
-    let (outgoing, incoming) = ws_stream.split();
+    let ws_endpoint = warp::path::end()
+        // The `ws()` filter will prepare Websocket handshake...
+        .and(warp::ws())
+        .and(users)
+        .map(|ws: warp::ws::Ws, users| {
+            // This will call our function if the handshake succeeds.
+            ws.on_upgrade(move |socket| user_connected(socket, users))
+        });
 
-    let process_incoming = incoming.try_for_each(|ws_msg| {
-        debug!(
-            "Received a message from {}: {}",
-            addr,
-            ws_msg.to_text().unwrap()
-        );
 
-        // // We want to broadcast the message to everyone except ourselves.
-        // let broadcast_recipients =
-        //     peers.iter().filter(|(peer_addr, _)| peer_addr != &&addr).map(|(_, ws_sink)| ws_sink);
+    warp::serve(ws_endpoint).run(([127, 0, 0, 1], 3030)).await;
+}
 
-        let parsed = match ws_msg {
-            Message::Text(str) => ClientMessage::parse(&str),
-            _ => return future::ok(()),
-        };
+async fn user_connected(ws: WebSocket, state: State) {
+    // Use a counter to assign a new unique ID for this user.
+    let my_id = NEXT_USER_ID.fetch_add(1, Ordering::Relaxed);
 
-        let msg = match parsed {
+    eprintln!("new user: {}", my_id);
+
+    // Split the socket into a sender and receive of messages.
+    let (mut user_ws_tx, mut user_ws_rx) = ws.split();
+
+    // Use an unbounded channel to handle buffering and flushing of messages
+    // to the websocket...
+    let (tx, rx) = mpsc::unbounded_channel();
+    let mut rx = UnboundedReceiverStream::new(rx);
+
+    tokio::task::spawn(async move {
+        while let Some(message) = rx.next().await {
+            user_ws_tx
+                .send(message)
+                .unwrap_or_else(|e| {
+                    eprintln!("websocket send error: {}", e);
+                })
+                .await;
+        }
+    });
+
+    // Save the sender in our list of connected users.
+    state.users.write().await.insert(my_id, tx.clone());
+
+    // Send the user the current ballot.
+    tx.send(Message::text(state.ballot.read().await.serialize())).unwrap();
+
+    // Return a `Future` that is basically a state machine managing
+    // this specific user's connection.
+
+    // Every time the user sends a message, broadcast it to
+    // all other users...
+    while let Some(result) = user_ws_rx.next().await {
+        let msg = match result {
             Ok(msg) => msg,
             Err(e) => {
-                debug!("{}", e);
-                return future::ok(());
+                eprintln!("websocket error(uid={}): {}", my_id, e);
+                break;
             }
         };
+        user_message(my_id, msg, &state).await;
+    }
 
-        match msg {
-            ClientMessage::ClientSetBallot(ballot_data) => {
-                let mut ballot_guard = ballot.write().unwrap();
+    // user_ws_rx stream will keep processing as long as the user stays
+    // connected. Once they disconnect, then...
+    user_disconnected(my_id, &state.users).await;
+}
+
+async fn user_message(my_id: usize, msg: Message, state: &State) {
+    // Skip any non-Text messages...
+    let msg = if let Ok(s) = msg.to_str() {
+        s
+    } else {
+        return;
+    };
+
+    let msg = ClientMessage::parse(msg).unwrap();
+    match msg {
+        ClientMessage::ClientSetBallot(ballot_data) => {
+            { // ballot_guard drops outside this closure.
+                let mut ballot_guard = state.ballot.write().await;
                 ballot_guard.choices = ballot_data.choices;
                 ballot_guard.question = ballot_data.question;
                 ballot_guard.duration = ballot_data.duration;
                 ballot_guard.expires = time::OffsetDateTime::now_utc() + ballot_guard.duration;
-                drop(ballot_guard);
-                send_ballot_to_all(peer_map.clone(), ballot.clone());
-                vote_map.clear();
-                send_votes_to_all(peer_map.clone(), vote_map.clone());
             }
-            ClientMessage::ClientVote(vote) => {
-                if vote >= VOTE_SIZE {
-                    debug!("user {} sent vote index >= than VOTE_SIZE: {}", addr, vote);
-                    return future::ok(());
-                }
-                vote_map.insert(addr, vote);
-                send_votes_to_all(peer_map.clone(), vote_map.clone());
-            }
+            send_to_all(state.ballot.read().await.serialize(), state.clone()).await;
+            state.votes.write().await.clear();
+            send_votes_to_all(state.clone()).await;
         }
-        future::ok(())
-    });
+        ClientMessage::ClientVote(vote) => {
+            if vote >= BALLOT_SIZE {
+                debug!("user {} sent vote index >= than VOTE_SIZE: {}", my_id, vote);
+                return ();
+            }
+            state.votes.write().await.insert(my_id, vote);
+            send_votes_to_all(state.clone()).await;
+        }
+    }
 
-    let receive_from_others = rx.map(Ok).forward(outgoing);
-
-    // Send ballot data to client
-    let msg = ballot.read().unwrap().serialize();
-    tx.unbounded_send(Message::Text(msg))
-        .expect("Failed to send ballot data");
-    send_votes_to_all(peer_map.clone(), vote_map.clone());
-
-    future::select(process_incoming, receive_from_others).await;
-
-    info!("{} disconnected", &addr);
-    peer_map.remove(&addr);
-    vote_map.remove(&addr);
-    send_votes_to_all(peer_map.clone(), vote_map.clone());
+    // New message from this user, send it to everyone else (except same uid)...
 }
 
-fn send_ballot_to_all(peer_map: PeerMap, ballot: Ballot) -> () {
-    let msg = ballot.read().unwrap().serialize();
-    send_to_all(peer_map.clone(), msg);
-}
-
-fn send_votes_to_all(peer_map: PeerMap, vote_map: VoteMap) -> () {
-    let votes = collate_votes(vote_map);
+async fn send_votes_to_all(state: State) {
+    let votes = collate_votes(state.clone()).await;
     let msg = serde_json::json!({
         "code": "setVotes",
         "data": votes,
     }).to_string();
-    send_to_all(peer_map, msg);
+    send_to_all(msg, state).await;
 }
 
-fn send_to_all(peer_map: PeerMap, msg: String) -> () {
-    let msg = Message::Text(msg);
-    peer_map.iter().for_each(|recp| {
-        recp.unbounded_send(msg.clone()).unwrap_or_default();
-    });
+async fn send_to_all(msg: String, state: State) {
+    for (_, tx) in state.users.read().await.iter() {
+        if let Err(_disconnected) = tx.send(Message::text(&msg)) {
+            // The tx is disconnected, our `user_disconnected` code
+            // should be happening in another task, nothing more to
+            // do here.
+        }
+    }
 }
 
-fn collate_votes(vote_map: VoteMap) -> Vec<u32> {
-    let mut ret = vec![0; VOTE_SIZE];
-    vote_map.iter().for_each(|vote_index| {
+async fn collate_votes(state: State) -> Vec<u32> {
+    let mut ret = vec![0; BALLOT_SIZE];
+    let vote_map = state.votes.read().await;
+    vote_map.iter().for_each(|(_addr, vote_index)| {
         let vote_index = *vote_index;
-        if vote_index < VOTE_SIZE {
+        if vote_index < BALLOT_SIZE {
             ret[vote_index] += 1;
         }
     });
     ret
 }
 
-#[tokio::main]
-async fn main() -> Result<(), IoError> {
-    env_logger::init();
+async fn user_disconnected(my_id: usize, users: &Users) {
+    eprintln!("good bye user: {}", my_id);
 
-    let addr = env::args()
-        .nth(1)
-        .unwrap_or_else(|| "127.0.0.1:8080".to_string());
-
-    let peer_map = PeerMap::new(DashMap::new());
-    let vote_map = VoteMap::new(DashMap::new());
-    let ballot_data = ServerSetBallotData {
-        choices: vec![String::from("Init choice"); VOTE_SIZE],
-        question: String::from("Question from server"),
-        duration: time::Duration::new(0, 0),
-        expires: time::OffsetDateTime::now_utc(),
-    };
-    let ballot: Ballot = Ballot::new(RwLock::new(ballot_data));
-
-    // Create the event loop and TCP listener we'll accept connections on.
-    let try_socket = TcpListener::bind(&addr).await;
-    let listener = try_socket.expect("Failed to bind");
-    println!("Listening on: {}", addr);
-
-    // Let's spawn the handling of each connection in a separate task.
-
-    while let Ok((stream, addr)) = listener.accept().await {
-        tokio::spawn(handle_connection(
-            peer_map.clone(),
-            vote_map.clone(),
-            ballot.clone(),
-            stream,
-            addr,
-        ));
-    }
-
-    Ok(())
+    // Stream closed up, so remove from the user list
+    users.write().await.remove(&my_id);
 }
