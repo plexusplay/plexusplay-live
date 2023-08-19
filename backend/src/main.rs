@@ -71,7 +71,7 @@ async fn main() {
         });
 
     let vote_send_task = tokio::task::spawn(async move {
-        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(1));
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(300));
 
         loop {
             interval.tick().await;
