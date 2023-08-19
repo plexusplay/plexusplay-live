@@ -1,6 +1,7 @@
 config:
   # target: "ws://127.0.0.1:8080"
-  target: "wss://voting-socket.rumpus.club"
+  # target: "wss://voting-socket.rumpus.club"
+  target: "ws://rumpus.club:8080"
   phases:
     - duration: 20
       arrivalCount: 50
@@ -10,6 +11,10 @@ config:
       arrivalCount: 200
     - duration: 20
       arrivalCount: 400
+    - duration: 20
+      arrivalCount: 800
+    - duration: 20
+      arrivalCount: 1600
 
 scenarios:
   - engine: "ws"

@@ -6,8 +6,10 @@ use std::sync::{
     Arc,
 };
 
+use futures::join;
 use futures_util::{SinkExt, StreamExt, TryFutureExt};
 use log::{debug, error, log_enabled, info, Level};
+use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::{mpsc, RwLock};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use warp::hyper::Client;
@@ -56,7 +58,8 @@ async fn main() {
         votes: VoteMap::default(),
         ballot: RwLock::new(ballot_data),
     });    // Turn our "state" into a new Filter...
-    let users = warp::any().map(move || state.clone());
+    let state2 = state.clone();
+    let users = warp::any().map(move || state2.clone());
 
     let ws_endpoint = warp::path::end()
         // The `ws()` filter will prepare Websocket handshake...
@@ -67,6 +70,15 @@ async fn main() {
             ws.on_upgrade(move |socket| user_connected(socket, users))
         });
 
+    let vote_send_task = tokio::task::spawn(async move {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(1));
+
+        loop {
+            interval.tick().await;
+            send_votes_to_all(state.clone()).await;
+        }
+    });
+
     let addr = env::args()
     .nth(1)
     .unwrap_or_else(|| "127.0.0.1:8080".to_string());
@@ -75,7 +87,8 @@ async fn main() {
         .parse()
         .expect("Unable to parse socket address");
 
-    warp::serve(ws_endpoint).run(addr).await;
+    println!("running on {}", addr);
+    join!(warp::serve(ws_endpoint).run(addr), vote_send_task);
 }
 
 async fn user_connected(ws: WebSocket, state: State) {
@@ -106,8 +119,8 @@ async fn user_connected(ws: WebSocket, state: State) {
     // Save the sender in our list of connected users.
     state.users.write().await.insert(my_id, tx.clone());
 
-    // Send the user the current ballot.
-    tx.send(Message::text(state.ballot.read().await.serialize())).unwrap();
+    greet_user(tx, state.clone()).await;
+
 
     // Return a `Future` that is basically a state machine managing
     // this specific user's connection.
@@ -130,6 +143,12 @@ async fn user_connected(ws: WebSocket, state: State) {
     user_disconnected(my_id, &state.users).await;
 }
 
+async fn greet_user(tx: UnboundedSender<Message>, state: State) {
+    // Send the user the current ballot.
+    tx.send(Message::text(state.ballot.read().await.serialize())).unwrap();
+    // Send the user the current votes.
+}
+
 async fn user_message(my_id: usize, msg: Message, state: &State) {
     // Skip any non-Text messages...
     let msg = if let Ok(s) = msg.to_str() {
@@ -138,7 +157,13 @@ async fn user_message(my_id: usize, msg: Message, state: &State) {
         return;
     };
 
-    let msg = ClientMessage::parse(msg).unwrap();
+    let msg = match ClientMessage::parse(msg) {
+        Ok(msg) => msg,
+        Err(e) => {
+            debug!("error during parsing: {}", e);
+            return;
+        }
+    };
     match msg {
         ClientMessage::ClientSetBallot(ballot_data) => {
             { // ballot_guard drops outside this closure.
@@ -150,7 +175,6 @@ async fn user_message(my_id: usize, msg: Message, state: &State) {
             }
             send_to_all(state.ballot.read().await.serialize(), state.clone()).await;
             state.votes.write().await.clear();
-            send_votes_to_all(state.clone()).await;
         }
         ClientMessage::ClientVote(vote) => {
             if vote >= BALLOT_SIZE {
@@ -158,7 +182,6 @@ async fn user_message(my_id: usize, msg: Message, state: &State) {
                 return ();
             }
             state.votes.write().await.insert(my_id, vote);
-            send_votes_to_all(state.clone()).await;
         }
     }
 
@@ -167,11 +190,7 @@ async fn user_message(my_id: usize, msg: Message, state: &State) {
 
 async fn send_votes_to_all(state: State) {
     let votes = collate_votes(state.clone()).await;
-    let msg = serde_json::json!({
-        "code": "setVotes",
-        "data": votes,
-    }).to_string();
-    send_to_all(msg, state).await;
+    send_to_all(votes.to_string(), state).await;
 }
 
 async fn send_to_all(msg: String, state: State) {
@@ -184,7 +203,7 @@ async fn send_to_all(msg: String, state: State) {
     }
 }
 
-async fn collate_votes(state: State) -> Vec<u32> {
+async fn collate_votes(state: State) -> serde_json::Value {
     let mut ret = vec![0; BALLOT_SIZE];
     let vote_map = state.votes.read().await;
     vote_map.iter().for_each(|(_addr, vote_index)| {
@@ -193,7 +212,10 @@ async fn collate_votes(state: State) -> Vec<u32> {
             ret[vote_index] += 1;
         }
     });
-    ret
+    return serde_json::json!({
+            "code": "setVotes",
+            "data": ret,
+        });
 }
 
 async fn user_disconnected(my_id: usize, users: &Users) {
