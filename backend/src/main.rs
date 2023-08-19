@@ -8,11 +8,10 @@ use std::sync::{
 
 use futures::join;
 use futures_util::{SinkExt, StreamExt, TryFutureExt};
-use log::{debug, error, log_enabled, info, Level};
+use log::debug;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio::sync::{mpsc, RwLock};
 use tokio_stream::wrappers::UnboundedReceiverStream;
-use warp::hyper::Client;
 use warp::ws::{Message, WebSocket};
 use warp::Filter;
 
@@ -28,8 +27,6 @@ static NEXT_USER_ID: AtomicUsize = AtomicUsize::new(1);
 ///
 /// - Key is their id
 /// - Value is a sender of `warp::ws::Message`
-
-
 type Users = RwLock<HashMap<usize, mpsc::UnboundedSender<Message>>>;
 type VoteMap = RwLock<HashMap<usize, usize>>;
 type Ballot = RwLock<ServerSetBallotData>;
@@ -88,7 +85,7 @@ async fn main() {
         .expect("Unable to parse socket address");
 
     println!("running on {}", addr);
-    join!(warp::serve(ws_endpoint).run(addr), vote_send_task);
+    let _ = join!(warp::serve(ws_endpoint).run(addr), vote_send_task);
 }
 
 async fn user_connected(ws: WebSocket, state: State) {
@@ -116,10 +113,8 @@ async fn user_connected(ws: WebSocket, state: State) {
         }
     });
 
-    // Save the sender in our list of connected users.
-    state.users.write().await.insert(my_id, tx.clone());
 
-    greet_user(tx, state.clone()).await;
+    greet_user(my_id, tx, state.clone()).await;
 
 
     // Return a `Future` that is basically a state machine managing
@@ -140,13 +135,17 @@ async fn user_connected(ws: WebSocket, state: State) {
 
     // user_ws_rx stream will keep processing as long as the user stays
     // connected. Once they disconnect, then...
-    user_disconnected(my_id, &state.users).await;
+    user_disconnected(my_id, &state).await;
 }
 
-async fn greet_user(tx: UnboundedSender<Message>, state: State) {
+async fn greet_user(my_id: usize, tx: UnboundedSender<Message>, state: State) {
+    // Save the sender in our list of connected users.
+    state.users.write().await.insert(my_id, tx.clone());
     // Send the user the current ballot.
-    tx.send(Message::text(state.ballot.read().await.serialize())).unwrap();
-    // Send the user the current votes.
+    let ballot = state.ballot.read().await.serialize();
+    if let Err(_err) = tx.send(Message::text(ballot)) {
+        eprint!("couldn't send ballot to {}", my_id);
+    }
 }
 
 async fn user_message(my_id: usize, msg: Message, state: &State) {
@@ -218,9 +217,10 @@ async fn collate_votes(state: State) -> serde_json::Value {
         });
 }
 
-async fn user_disconnected(my_id: usize, users: &Users) {
+async fn user_disconnected(my_id: usize, state: &State) {
     debug!("good bye user: {}", my_id);
 
     // Stream closed up, so remove from the user list
-    users.write().await.remove(&my_id);
+    state.users.write().await.remove(&my_id);
+    state.votes.write().await.remove(&my_id);
 }
