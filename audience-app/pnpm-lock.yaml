@@ -27,10 +27,10 @@ importers:
         specifier: ~55.0.6
         version: 55.0.6(react-native@0.85.3(@babel/core@7.29.0)(react@19.2.6))(react@19.2.6)
       react:
-        specifier: ^19.2.6
+        specifier: ^19.2.0
         version: 19.2.6
       react-dom:
-        specifier: ^19.2.6
+        specifier: ^19.2.0
         version: 19.2.6(react@19.2.6)
       react-native:
         specifier: 0.85.3
