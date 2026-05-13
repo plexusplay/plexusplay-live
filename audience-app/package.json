@@ -1,5 +1,6 @@
 {
   "name": "plexusplay-voting",
+  "packageManager": "pnpm",
   "version": "1.0.0",
   "main": "node_modules/expo/AppEntry.js",
   "scripts": {
@@ -10,22 +11,22 @@
     "build": "expo export --platform web"
   },
   "dependencies": {
-    "@expo/metro-runtime": "~4.0.0",
-    "@react-native-async-storage/async-storage": "1.23.1",
-    "expo": "~52.0.11",
-    "expo-crypto": "~14.0.1",
-    "expo-font": "~13.0.1",
-    "expo-status-bar": "~2.0.0",
-    "react": "18.3.1",
-    "react-dom": "18.3.1",
-    "react-native": "0.76.3",
-    "react-native-svg": "15.8.0",
-    "react-native-web": "^0.19.11",
+    "@expo/metro-runtime": "^55.0.11",
+    "@react-native-async-storage/async-storage": "^2.2.0",
+    "expo": "^55.0.24",
+    "expo-crypto": "~55.0.15",
+    "expo-font": "~55.0.7",
+    "expo-status-bar": "~55.0.6",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-native": "0.85.3",
+    "react-native-svg": "^15.15.5",
+    "react-native-web": "^0.21.2",
     "reconnecting-websocket": "^4.4.0",
     "unique-names-generator": "^4.7.1"
   },
   "devDependencies": {
-    "@babel/core": "^7.24.4"
+    "@babel/core": "^7.29.0"
   },
   "private": true
 }
